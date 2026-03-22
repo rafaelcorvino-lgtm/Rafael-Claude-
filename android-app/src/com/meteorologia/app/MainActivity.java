@@ -2,7 +2,6 @@ package com.meteorologia.app;
 
 import android.app.Activity;
 import android.os.Bundle;
-import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
@@ -10,14 +9,16 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.WebResourceResponse;
 import android.webkit.ConsoleMessage;
 import android.graphics.Color;
 import android.os.Build;
-import android.Manifest;
-import android.content.pm.PackageManager;
+import java.io.InputStream;
+import java.io.IOException;
 
 public class MainActivity extends Activity {
     private WebView webView;
+    private static final String LOCAL_HOST = "https://meteorologia.app/";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,13 +46,32 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setGeolocationDatabasePath(getFilesDir().getPath());
-        settings.setAllowUniversalAccessFromFileURLs(true);
-        settings.setAllowFileAccessFromFileURLs(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
         webView.setWebViewClient(new WebViewClient() {
+            @Override
+            public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                // Serve local assets from our fake https domain
+                if (url != null && url.startsWith(LOCAL_HOST)) {
+                    String path = url.substring(LOCAL_HOST.length());
+                    if (path.isEmpty() || path.equals("/")) {
+                        path = "index.html";
+                    }
+                    try {
+                        InputStream is = getAssets().open("www/" + path);
+                        String mimeType = getMimeType(path);
+                        return new WebResourceResponse(mimeType, "UTF-8", is);
+                    } catch (IOException e) {
+                        // File not found in assets, let it pass through
+                        return null;
+                    }
+                }
+                // All other URLs (APIs, CDNs) go through normally
+                return null;
+            }
+
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
                 view.loadUrl(url);
@@ -76,7 +96,20 @@ public class MainActivity extends Activity {
         });
 
         webView.setBackgroundColor(Color.parseColor("#0f1923"));
-        webView.loadUrl("file:///android_asset/www/index.html");
+        // Load from fake https domain - shouldInterceptRequest serves local files
+        webView.loadUrl(LOCAL_HOST + "index.html");
+    }
+
+    private String getMimeType(String path) {
+        if (path.endsWith(".html")) return "text/html";
+        if (path.endsWith(".css")) return "text/css";
+        if (path.endsWith(".js")) return "application/javascript";
+        if (path.endsWith(".json")) return "application/json";
+        if (path.endsWith(".png")) return "image/png";
+        if (path.endsWith(".svg")) return "image/svg+xml";
+        if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
+        if (path.endsWith(".ico")) return "image/x-icon";
+        return "application/octet-stream";
     }
 
     @Override
