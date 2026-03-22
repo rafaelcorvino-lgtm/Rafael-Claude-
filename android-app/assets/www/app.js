@@ -374,71 +374,86 @@ function renderDailyFromWttr(weatherDays) {
     });
 }
 
+function render7DayData(daily) {
+    if (!daily || !daily.time || daily.time.length === 0) return;
+    var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    elements.dailyContainer.innerHTML = '';
+
+    for (var i = 0; i < daily.time.length; i++) {
+        var date = new Date(daily.time[i] + 'T00:00:00');
+        var wmoCode = daily.weather_code[i];
+        var weather = getWmoWeather(wmoCode);
+        var maxTemp = Math.round(daily.temperature_2m_max[i]);
+        var minTemp = Math.round(daily.temperature_2m_min[i]);
+        var precip = daily.precipitation_sum[i];
+        var windMax = Math.round(daily.wind_speed_10m_max[i]);
+        var windDir = daily.wind_direction_10m_dominant[i];
+        var uvMax = daily.uv_index_max[i];
+        var precipProb = daily.precipitation_probability_max[i];
+        var sunrise = daily.sunrise[i] ? daily.sunrise[i].split('T')[1] : '--:--';
+        var sunset = daily.sunset[i] ? daily.sunset[i].split('T')[1] : '--:--';
+
+        var windDirText = getWindDirection(windDir);
+
+        var card = document.createElement('div');
+        card.className = 'day-card';
+        card.innerHTML =
+            '<div class="day-card-header">' +
+                '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()] + ' ' + date.getDate()) + '</div>' +
+                '<div class="icon">' + weather.icon + '</div>' +
+                '<div class="desc">' + weather.desc + '</div>' +
+                '<div class="temps">' +
+                    '<span class="temp-max">' + maxTemp + '°</span>' +
+                    '<span class="temp-min">' + minTemp + '°</span>' +
+                '</div>' +
+                '<span class="expand-arrow">▼</span>' +
+            '</div>' +
+            '<div class="day-card-details">' +
+                '<div class="day-detail-grid">' +
+                    '<div class="day-detail-item"><span class="label">Chuva</span><span class="value">' + precip + ' mm</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Prob. Chuva</span><span class="value">' + precipProb + '%</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Vento Máx</span><span class="value">' + windMax + ' km/h</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Dir. Vento</span><span class="value">' + windDirText + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">UV Máx</span><span class="value">' + uvMax + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Amplitude</span><span class="value">' + (maxTemp - minTemp) + '°C</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Nascer do Sol</span><span class="value">' + sunrise + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Pôr do Sol</span><span class="value">' + sunset + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Condição</span><span class="value">' + weather.desc + '</span></div>' +
+                '</div>' +
+            '</div>';
+
+        card.addEventListener('click', function() {
+            this.classList.toggle('expanded');
+        });
+
+        elements.dailyContainer.appendChild(card);
+    }
+}
+
 function fetch7DayForecast(lat, lon) {
     var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
         '&timezone=auto&forecast_days=7';
 
+    // Try NativeBridge first
     nativeGet(url, function(err, data) {
-        if (err || !data || !data.daily) {
-            // Keep wttr.in fallback data already rendered
+        if (!err && data && data.daily) {
+            render7DayData(data.daily);
             return;
         }
-
-        var daily = data.daily;
-        if (!daily.time || daily.time.length === 0) return;
-        var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-        elements.dailyContainer.innerHTML = '';
-
-        for (var i = 0; i < daily.time.length; i++) {
-            var date = new Date(daily.time[i] + 'T00:00:00');
-            var wmoCode = daily.weather_code[i];
-            var weather = getWmoWeather(wmoCode);
-            var maxTemp = Math.round(daily.temperature_2m_max[i]);
-            var minTemp = Math.round(daily.temperature_2m_min[i]);
-            var precip = daily.precipitation_sum[i];
-            var windMax = Math.round(daily.wind_speed_10m_max[i]);
-            var windDir = daily.wind_direction_10m_dominant[i];
-            var uvMax = daily.uv_index_max[i];
-            var precipProb = daily.precipitation_probability_max[i];
-            var sunrise = daily.sunrise[i] ? daily.sunrise[i].split('T')[1] : '--:--';
-            var sunset = daily.sunset[i] ? daily.sunset[i].split('T')[1] : '--:--';
-
-            var windDirText = getWindDirection(windDir);
-
-            var card = document.createElement('div');
-            card.className = 'day-card';
-            card.innerHTML =
-                '<div class="day-card-header">' +
-                    '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()] + ' ' + date.getDate()) + '</div>' +
-                    '<div class="icon">' + weather.icon + '</div>' +
-                    '<div class="desc">' + weather.desc + '</div>' +
-                    '<div class="temps">' +
-                        '<span class="temp-max">' + maxTemp + '°</span>' +
-                        '<span class="temp-min">' + minTemp + '°</span>' +
-                    '</div>' +
-                    '<span class="expand-arrow">▼</span>' +
-                '</div>' +
-                '<div class="day-card-details">' +
-                    '<div class="day-detail-grid">' +
-                        '<div class="day-detail-item"><span class="label">Chuva</span><span class="value">' + precip + ' mm</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Prob. Chuva</span><span class="value">' + precipProb + '%</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Vento Máx</span><span class="value">' + windMax + ' km/h</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Dir. Vento</span><span class="value">' + windDirText + '</span></div>' +
-                        '<div class="day-detail-item"><span class="label">UV Máx</span><span class="value">' + uvMax + '</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Amplitude</span><span class="value">' + (maxTemp - minTemp) + '°C</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Nascer do Sol</span><span class="value">' + sunrise + '</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Pôr do Sol</span><span class="value">' + sunset + '</span></div>' +
-                        '<div class="day-detail-item"><span class="label">Condição</span><span class="value">' + weather.desc + '</span></div>' +
-                    '</div>' +
-                '</div>';
-
-            card.addEventListener('click', function() {
-                this.classList.toggle('expanded');
-            });
-
-            elements.dailyContainer.appendChild(card);
-        }
+        // Fallback: try XHR directly (may work if WebView allows CORS)
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            try {
+                var d = JSON.parse(xhr.responseText);
+                if (d && d.daily) render7DayData(d.daily);
+            } catch(e) {}
+        };
+        xhr.onerror = function() {};
+        xhr.ontimeout = function() {};
+        xhr.send();
     });
 }
 
