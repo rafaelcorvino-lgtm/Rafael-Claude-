@@ -203,33 +203,8 @@ function searchAndFetch(query) {
     });
 }
 
-function fetchOpenMeteo7Day(lat, lon) {
-    var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
-        '&timezone=auto&forecast_days=7';
-    if (typeof NativeBridge !== 'undefined') {
-        try {
-            var response = NativeBridge.httpGet(url);
-            console.log('OpenMeteo sync response: ' + (response ? response.substring(0, 100) : 'null'));
-            var data = JSON.parse(response);
-            if (!data._error && data.daily) {
-                return data.daily;
-            }
-            console.log('OpenMeteo error: ' + JSON.stringify(data._error || data._message));
-        } catch(e) {
-            console.log('OpenMeteo exception: ' + e.message);
-        }
-    }
-    return null;
-}
-
 function fetchWeather(lat, lon, name) {
     showLoading();
-    // Fetch 7-day forecast from Open-Meteo FIRST (synchronous via NativeBridge)
-    var openMeteoDaily = fetchOpenMeteo7Day(lat, lon);
-    console.log('OpenMeteo result: ' + (openMeteoDaily ? openMeteoDaily.time.length + ' days' : 'null'));
-
-    // Use wttr.in with lat,lon format - returns JSON weather data
     var url = WTTR_URL + '/' + lat + ',' + lon + '?format=j1';
     nativeGet(url, function(err, data) {
         if (err) {
@@ -240,11 +215,44 @@ function fetchWeather(lat, lon, name) {
             showError('Dados meteorológicos indisponíveis.');
             return;
         }
-        renderWeather(data, name, lat, lon, openMeteoDaily);
+        renderWeather(data, name, lat, lon);
+        // Fetch 7-day forecast via Java proxy (bypasses CORS/TLS issues)
+        fetch7DayViaProxy(lat, lon);
     });
 }
 
-function renderWeather(data, name, lat, lon, openMeteoDaily) {
+function fetch7DayViaProxy(lat, lon) {
+    var openMeteoUrl = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
+        '&timezone=auto&forecast_days=7';
+    var proxyUrl = 'api/proxy?url=' + encodeURIComponent(openMeteoUrl);
+    console.log('Fetching 7-day via proxy');
+
+    var xhr = new XMLHttpRequest();
+    xhr.open('GET', proxyUrl);
+    xhr.timeout = 20000;
+    xhr.onload = function() {
+        console.log('Proxy response: status=' + xhr.status + ' len=' + xhr.responseText.length);
+        try {
+            var d = JSON.parse(xhr.responseText);
+            if (d._error) {
+                console.log('Proxy error: ' + d._message);
+                return;
+            }
+            if (d && d.daily && d.daily.time && d.daily.time.length > 0) {
+                console.log('Got ' + d.daily.time.length + ' days from proxy');
+                render7DayData(d.daily);
+            }
+        } catch(e) {
+            console.log('Proxy parse error: ' + e.message);
+        }
+    };
+    xhr.onerror = function() { console.log('Proxy XHR onerror'); };
+    xhr.ontimeout = function() { console.log('Proxy XHR timeout'); };
+    xhr.send();
+}
+
+function renderWeather(data, name, lat, lon) {
     hideLoading();
     elements.error.classList.add('hidden');
     elements.content.classList.remove('hidden');
@@ -306,15 +314,9 @@ function renderWeather(data, name, lat, lon, openMeteoDaily) {
         shown++;
     });
 
-    // Daily forecast - use pre-fetched Open-Meteo 7 days, fallback to wttr.in 3 days
+    // Daily forecast - show wttr.in 3 days first, then 7-day proxy replaces it
     elements.dailyContainer.innerHTML = '';
-    if (openMeteoDaily && openMeteoDaily.time && openMeteoDaily.time.length > 0) {
-        console.log('Rendering ' + openMeteoDaily.time.length + ' days from Open-Meteo');
-        render7DayData(openMeteoDaily);
-    } else {
-        console.log('Falling back to wttr.in ' + data.weather.length + ' days');
-        renderDailyFromWttr(data.weather);
-    }
+    renderDailyFromWttr(data.weather);
 
     // Initialize radar
     if (typeof L !== 'undefined') {
@@ -459,7 +461,6 @@ function render7DayData(daily) {
     }
 }
 
-// fetch7DayForecast moved to fetchOpenMeteo7Day (synchronous, called before render)
 
 function getWindDirection(degrees) {
     if (degrees == null) return '--';

@@ -16,11 +16,13 @@ import android.webkit.JavascriptInterface;
 import android.graphics.Color;
 import android.os.Build;
 import java.io.InputStream;
+import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLDecoder;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -65,6 +67,10 @@ public class MainActivity extends Activity {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
+                WebResourceResponse proxyResponse = handleApiProxy(url);
+                if (proxyResponse != null) {
+                    return proxyResponse;
+                }
                 WebResourceResponse localResponse = serveLocalAsset(url);
                 if (localResponse != null) {
                     return localResponse;
@@ -74,6 +80,10 @@ public class MainActivity extends Activity {
 
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
+                WebResourceResponse proxyResponse = handleApiProxy(url);
+                if (proxyResponse != null) {
+                    return proxyResponse;
+                }
                 WebResourceResponse localResponse = serveLocalAsset(url);
                 if (localResponse != null) {
                     return localResponse;
@@ -148,6 +158,72 @@ public class MainActivity extends Activity {
             } finally {
                 if (conn != null) conn.disconnect();
             }
+        }
+    }
+
+    private static final String API_PROXY_PREFIX = LOCAL_HOST + "api/proxy?url=";
+
+    private WebResourceResponse handleApiProxy(String url) {
+        if (url == null || !url.startsWith(API_PROXY_PREFIX)) {
+            return null;
+        }
+        String encodedTarget = url.substring(API_PROXY_PREFIX.length());
+        HttpURLConnection conn = null;
+        try {
+            String targetUrl = URLDecoder.decode(encodedTarget, "UTF-8");
+            android.util.Log.d("Meteorologia", "API Proxy fetching: " + targetUrl);
+            conn = (HttpURLConnection) new URL(targetUrl).openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(15000);
+            conn.setRequestProperty("Accept", "application/json");
+            conn.setRequestProperty("User-Agent", "MeteorologiaApp/1.0");
+
+            int code = conn.getResponseCode();
+            android.util.Log.d("Meteorologia", "API Proxy response code: " + code);
+
+            StringBuilder sb = new StringBuilder();
+            if (code == 200) {
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                reader.close();
+            } else {
+                sb.append("{\"_error\":true,\"_message\":\"HTTP ").append(code).append("\"}");
+            }
+
+            byte[] bytes = sb.toString().getBytes("UTF-8");
+            android.util.Log.d("Meteorologia", "API Proxy response length: " + bytes.length);
+
+            java.util.Map<String, String> headers = new java.util.HashMap<>();
+            headers.put("Access-Control-Allow-Origin", "*");
+            headers.put("Cache-Control", "no-cache");
+
+            return new WebResourceResponse(
+                "application/json", "UTF-8",
+                200, "OK", headers,
+                new ByteArrayInputStream(bytes));
+        } catch (Exception e) {
+            android.util.Log.e("Meteorologia", "API Proxy error: " + e.getMessage());
+            try {
+                String errorJson = "{\"_error\":true,\"_message\":\"" +
+                    e.getClass().getSimpleName() + ": " +
+                    e.getMessage().replace("\"", "'") + "\"}";
+                byte[] bytes = errorJson.getBytes("UTF-8");
+                java.util.Map<String, String> headers = new java.util.HashMap<>();
+                headers.put("Access-Control-Allow-Origin", "*");
+                return new WebResourceResponse(
+                    "application/json", "UTF-8",
+                    200, "OK", headers,
+                    new ByteArrayInputStream(bytes));
+            } catch (Exception e2) {
+                return null;
+            }
+        } finally {
+            if (conn != null) conn.disconnect();
         }
     }
 
