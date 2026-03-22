@@ -576,6 +576,7 @@ document.addEventListener('click', function(e) {
 
 var RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 var radarMap = null;
+var radarMarker = null;
 var radarLayers = [];
 var radarFrames = [];
 var radarPastCount = 0;
@@ -601,6 +602,21 @@ function initRadar(lat, lon) {
                 maxZoom: 18,
                 subdomains: 'abcd',
             }).addTo(radarMap);
+        }
+
+        // Add/update city marker
+        var cityName = elements.city.textContent || '';
+        var markerIcon = L.divIcon({
+            className: 'radar-city-marker',
+            html: '<div class="radar-marker-pin"></div><div class="radar-marker-label">' + cityName + '</div>',
+            iconSize: [120, 40],
+            iconAnchor: [60, 36]
+        });
+        if (radarMarker) {
+            radarMarker.setLatLng([lat, lon]);
+            radarMarker.setIcon(markerIcon);
+        } else {
+            radarMarker = L.marker([lat, lon], { icon: markerIcon, zIndexOffset: 1000 }).addTo(radarMap);
         }
 
         // Clear old radar layers
