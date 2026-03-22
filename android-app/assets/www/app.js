@@ -261,7 +261,7 @@ function render7TimerData(dataseries) {
     elements.dailyContainer.innerHTML = '';
 
     // Only show 7 days
-    var days = dataseries.slice(0, 7);
+    var days = dataseries.slice(0, 8);
 
     for (var i = 0; i < days.length; i++) {
         var day = days[i];
