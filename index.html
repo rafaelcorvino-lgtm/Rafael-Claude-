@@ -13,7 +13,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="style.css">
-    <!-- Leaflet removed - radar disabled due to network restrictions -->
+    <link rel="stylesheet" href="leaflet.css">
 </head>
 <body>
     <div class="app">
@@ -83,10 +83,19 @@
                 </div>
             </section>
 
-            <!-- Radar hidden - elements kept for JS compatibility -->
-            <div id="radar-map" class="hidden"></div>
-            <button id="radar-play" class="hidden"></button>
-            <span id="radar-time" class="hidden"></span>
+            <section class="radar-section">
+                <h3>Radar de Chuva ao Vivo</h3>
+                <div class="radar-controls">
+                    <button id="radar-play" title="Play/Pause">▶️</button>
+                    <span id="radar-time" class="radar-time">--:--</span>
+                </div>
+                <div id="radar-map" class="radar-map"></div>
+                <div class="radar-legend">
+                    <span class="legend-label">Leve</span>
+                    <div class="legend-bar"></div>
+                    <span class="legend-label">Forte</span>
+                </div>
+            </section>
 
             <section class="hourly-forecast">
                 <h3>Próximas Horas</h3>
@@ -100,6 +109,7 @@
         </main>
     </div>
 
+    <script src="leaflet.js"></script>
     <script src="app.js"></script>
     <script>
         // Service Worker disabled in APK (file:// protocol)

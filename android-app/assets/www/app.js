@@ -299,10 +299,12 @@ function renderWeather(data, name, lat, lon) {
         elements.dailyContainer.appendChild(card);
     });
 
-    // Hide radar section (rainviewer may also be unreachable)
-    try {
-        document.querySelector('.radar-section').style.display = 'none';
-    } catch(e) {}
+    // Initialize radar
+    if (typeof L !== 'undefined') {
+        initRadar(lat, lon);
+    } else {
+        try { document.querySelector('.radar-section').style.display = 'none'; } catch(e) {}
+    }
 }
 
 function formatDate(date) {
@@ -333,3 +335,115 @@ document.addEventListener('click', function(e) {
         elements.suggestions.classList.add('hidden');
     }
 });
+
+// ---- Radar de Chuva ao Vivo (RainViewer) ----
+
+var RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+var radarMap = null;
+var radarLayers = [];
+var radarFrames = [];
+var radarIndex = 0;
+var radarInterval = null;
+var radarPlaying = false;
+
+function initRadar(lat, lon) {
+    if (typeof L === 'undefined') return;
+
+    try {
+        document.querySelector('.radar-section').style.display = '';
+
+        if (radarMap) {
+            radarMap.setView([lat, lon], 7);
+        } else {
+            radarMap = L.map('radar-map', {
+                zoomControl: true,
+                attributionControl: false,
+            }).setView([lat, lon], 7);
+
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 18,
+            }).addTo(radarMap);
+        }
+
+        // Clear old radar layers
+        radarLayers.forEach(function(layer) { radarMap.removeLayer(layer); });
+        radarLayers = [];
+        radarFrames = [];
+        radarIndex = 0;
+        stopRadarAnimation();
+
+        // Fetch radar data via NativeBridge
+        nativeGet(RAINVIEWER_URL, function(err, data) {
+            if (err) {
+                elements.radarTime.textContent = 'Radar indisponível';
+                return;
+            }
+            try {
+                var past = data.radar.past || [];
+                var nowcast = data.radar.nowcast || [];
+                radarFrames = past.concat(nowcast);
+
+                radarFrames.forEach(function(frame) {
+                    var layer = L.tileLayer(
+                        data.host + frame.path + '/256/{z}/{x}/{y}/4/1_1.png',
+                        { opacity: 0, zIndex: 10 }
+                    );
+                    radarLayers.push(layer);
+                    layer.addTo(radarMap);
+                });
+
+                if (radarLayers.length > 0) {
+                    radarIndex = past.length > 0 ? past.length - 1 : 0;
+                    showRadarFrame(radarIndex);
+                }
+            } catch(e) {
+                elements.radarTime.textContent = 'Radar indisponível';
+            }
+        });
+
+        // Fix map rendering
+        setTimeout(function() { if (radarMap) radarMap.invalidateSize(); }, 200);
+    } catch(e) {
+        elements.radarTime.textContent = 'Radar indisponível';
+    }
+}
+
+function showRadarFrame(index) {
+    radarLayers.forEach(function(layer, i) {
+        layer.setOpacity(i === index ? 0.6 : 0);
+    });
+
+    if (radarFrames[index]) {
+        var date = new Date(radarFrames[index].time * 1000);
+        var timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        var isPast = index < radarFrames.length - (radarFrames.length > 3 ? 3 : 0);
+        elements.radarTime.textContent = timeStr + (isPast ? '' : ' (previsão)');
+    }
+}
+
+function toggleRadarAnimation() {
+    if (radarPlaying) {
+        stopRadarAnimation();
+    } else {
+        startRadarAnimation();
+    }
+}
+
+function startRadarAnimation() {
+    if (radarLayers.length === 0) return;
+    radarPlaying = true;
+    elements.radarPlay.textContent = '⏸️';
+    radarInterval = setInterval(function() {
+        radarIndex = (radarIndex + 1) % radarFrames.length;
+        showRadarFrame(radarIndex);
+    }, 800);
+}
+
+function stopRadarAnimation() {
+    radarPlaying = false;
+    elements.radarPlay.textContent = '▶️';
+    clearInterval(radarInterval);
+    radarInterval = null;
+}
+
+elements.radarPlay.addEventListener('click', toggleRadarAnimation);
