@@ -203,8 +203,32 @@ function searchAndFetch(query) {
     });
 }
 
+function fetchOpenMeteo7Day(lat, lon) {
+    var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
+        '&timezone=auto&forecast_days=7';
+    if (typeof NativeBridge !== 'undefined') {
+        try {
+            var response = NativeBridge.httpGet(url);
+            console.log('OpenMeteo sync response: ' + (response ? response.substring(0, 100) : 'null'));
+            var data = JSON.parse(response);
+            if (!data._error && data.daily) {
+                return data.daily;
+            }
+            console.log('OpenMeteo error: ' + JSON.stringify(data._error || data._message));
+        } catch(e) {
+            console.log('OpenMeteo exception: ' + e.message);
+        }
+    }
+    return null;
+}
+
 function fetchWeather(lat, lon, name) {
     showLoading();
+    // Fetch 7-day forecast from Open-Meteo FIRST (synchronous via NativeBridge)
+    var openMeteoDaily = fetchOpenMeteo7Day(lat, lon);
+    console.log('OpenMeteo result: ' + (openMeteoDaily ? openMeteoDaily.time.length + ' days' : 'null'));
+
     // Use wttr.in with lat,lon format - returns JSON weather data
     var url = WTTR_URL + '/' + lat + ',' + lon + '?format=j1';
     nativeGet(url, function(err, data) {
@@ -216,11 +240,11 @@ function fetchWeather(lat, lon, name) {
             showError('Dados meteorológicos indisponíveis.');
             return;
         }
-        renderWeather(data, name, lat, lon);
+        renderWeather(data, name, lat, lon, openMeteoDaily);
     });
 }
 
-function renderWeather(data, name, lat, lon) {
+function renderWeather(data, name, lat, lon, openMeteoDaily) {
     hideLoading();
     elements.error.classList.add('hidden');
     elements.content.classList.remove('hidden');
@@ -282,9 +306,15 @@ function renderWeather(data, name, lat, lon) {
         shown++;
     });
 
-    // Daily forecast - try Open-Meteo 7 days first, fallback to wttr.in 3 days
+    // Daily forecast - use pre-fetched Open-Meteo 7 days, fallback to wttr.in 3 days
     elements.dailyContainer.innerHTML = '';
-    fetch7DayForecast(lat, lon, data.weather);
+    if (openMeteoDaily && openMeteoDaily.time && openMeteoDaily.time.length > 0) {
+        console.log('Rendering ' + openMeteoDaily.time.length + ' days from Open-Meteo');
+        render7DayData(openMeteoDaily);
+    } else {
+        console.log('Falling back to wttr.in ' + data.weather.length + ' days');
+        renderDailyFromWttr(data.weather);
+    }
 
     // Initialize radar
     if (typeof L !== 'undefined') {
@@ -429,58 +459,7 @@ function render7DayData(daily) {
     }
 }
 
-function fetch7DayForecast(lat, lon, wttrWeatherDays) {
-    var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
-        '&timezone=auto&forecast_days=7';
-
-    // Show wttr.in 3-day data immediately while loading 7-day
-    renderDailyFromWttr(wttrWeatherDays);
-
-    // Try NativeBridge first
-    if (typeof NativeBridge !== 'undefined') {
-        setTimeout(function() {
-            try {
-                var response = NativeBridge.httpGet(url);
-                console.log('Open-Meteo response length: ' + (response ? response.length : 'null'));
-                var data = JSON.parse(response);
-                if (data._error) {
-                    console.log('Open-Meteo error: ' + data._message);
-                } else if (data && data.daily) {
-                    console.log('Open-Meteo daily days: ' + data.daily.time.length);
-                    render7DayData(data.daily);
-                    return;
-                }
-            } catch(e) {
-                console.log('Open-Meteo parse error: ' + e.message);
-            }
-            // NativeBridge failed, try XHR
-            tryXHR7Day(url);
-        }, 100);
-    } else {
-        tryXHR7Day(url);
-    }
-}
-
-function tryXHR7Day(url) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url);
-    xhr.timeout = 15000;
-    xhr.onload = function() {
-        try {
-            var d = JSON.parse(xhr.responseText);
-            if (d && d.daily) {
-                console.log('XHR Open-Meteo daily days: ' + d.daily.time.length);
-                render7DayData(d.daily);
-            }
-        } catch(e) {
-            console.log('XHR parse error: ' + e.message);
-        }
-    };
-    xhr.onerror = function() { console.log('XHR 7day onerror'); };
-    xhr.ontimeout = function() { console.log('XHR 7day timeout'); };
-    xhr.send();
-}
+// fetch7DayForecast moved to fetchOpenMeteo7Day (synchronous, called before render)
 
 function getWindDirection(degrees) {
     if (degrees == null) return '--';
