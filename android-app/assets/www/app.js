@@ -35,6 +35,8 @@ var elements = {
     radarMap: document.getElementById('radar-map'),
     radarPlay: document.getElementById('radar-play'),
     radarTime: document.getElementById('radar-time'),
+    radarSlider: document.getElementById('radar-slider'),
+    radarTimestamps: document.getElementById('radar-timestamps'),
 };
 
 // WWO weather codes (used by wttr.in)
@@ -342,6 +344,7 @@ var RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
 var radarMap = null;
 var radarLayers = [];
 var radarFrames = [];
+var radarPastCount = 0;
 var radarIndex = 0;
 var radarInterval = null;
 var radarPlaying = false;
@@ -369,18 +372,20 @@ function initRadar(lat, lon) {
         radarLayers.forEach(function(layer) { radarMap.removeLayer(layer); });
         radarLayers = [];
         radarFrames = [];
+        radarPastCount = 0;
         radarIndex = 0;
         stopRadarAnimation();
 
         // Fetch radar data via NativeBridge
         nativeGet(RAINVIEWER_URL, function(err, data) {
             if (err) {
-                elements.radarTime.textContent = 'Radar indisponível';
+                elements.radarTime.textContent = 'Indisponível';
                 return;
             }
             try {
                 var past = data.radar.past || [];
                 var nowcast = data.radar.nowcast || [];
+                radarPastCount = past.length;
                 radarFrames = past.concat(nowcast);
 
                 radarFrames.forEach(function(frame) {
@@ -392,19 +397,53 @@ function initRadar(lat, lon) {
                     layer.addTo(radarMap);
                 });
 
+                // Setup slider
+                var slider = elements.radarSlider;
+                slider.max = radarFrames.length - 1;
+
+                // Build timestamp ticks
+                buildRadarTimestamps();
+
                 if (radarLayers.length > 0) {
-                    radarIndex = past.length > 0 ? past.length - 1 : 0;
+                    radarIndex = radarPastCount > 0 ? radarPastCount - 1 : 0;
+                    slider.value = radarIndex;
                     showRadarFrame(radarIndex);
                 }
             } catch(e) {
-                elements.radarTime.textContent = 'Radar indisponível';
+                elements.radarTime.textContent = 'Indisponível';
             }
         });
 
         // Fix map rendering
         setTimeout(function() { if (radarMap) radarMap.invalidateSize(); }, 200);
     } catch(e) {
-        elements.radarTime.textContent = 'Radar indisponível';
+        elements.radarTime.textContent = 'Indisponível';
+    }
+}
+
+function buildRadarTimestamps() {
+    var container = elements.radarTimestamps;
+    container.innerHTML = '';
+    var total = radarFrames.length;
+    if (total === 0) return;
+
+    // Show ~5 evenly spaced labels
+    var labelCount = Math.min(5, total);
+    var step = (total - 1) / (labelCount - 1);
+
+    for (var i = 0; i < labelCount; i++) {
+        var idx = Math.round(i * step);
+        var frame = radarFrames[idx];
+        var date = new Date(frame.time * 1000);
+        var timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        var span = document.createElement('span');
+        span.textContent = timeStr;
+        // Mark the "now" boundary
+        if (idx === radarPastCount - 1) {
+            span.className = 'now-marker';
+            span.textContent = 'Agora';
+        }
+        container.appendChild(span);
     }
 }
 
@@ -413,11 +452,14 @@ function showRadarFrame(index) {
         layer.setOpacity(i === index ? 0.6 : 0);
     });
 
+    // Update slider position
+    elements.radarSlider.value = index;
+
     if (radarFrames[index]) {
         var date = new Date(radarFrames[index].time * 1000);
         var timeStr = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        var isPast = index < radarFrames.length - (radarFrames.length > 3 ? 3 : 0);
-        elements.radarTime.textContent = timeStr + (isPast ? '' : ' (previsão)');
+        var isForecast = index >= radarPastCount;
+        elements.radarTime.textContent = timeStr + (isForecast ? ' ⟩' : '');
     }
 }
 
@@ -432,7 +474,7 @@ function toggleRadarAnimation() {
 function startRadarAnimation() {
     if (radarLayers.length === 0) return;
     radarPlaying = true;
-    elements.radarPlay.textContent = '⏸️';
+    elements.radarPlay.textContent = '⏸';
     radarInterval = setInterval(function() {
         radarIndex = (radarIndex + 1) % radarFrames.length;
         showRadarFrame(radarIndex);
@@ -441,9 +483,17 @@ function startRadarAnimation() {
 
 function stopRadarAnimation() {
     radarPlaying = false;
-    elements.radarPlay.textContent = '▶️';
+    elements.radarPlay.textContent = '▶';
     clearInterval(radarInterval);
     radarInterval = null;
 }
+
+// Slider drag
+elements.radarSlider.addEventListener('input', function() {
+    radarIndex = parseInt(this.value, 10);
+    showRadarFrame(radarIndex);
+    // Pause animation when user drags
+    if (radarPlaying) stopRadarAnimation();
+});
 
 elements.radarPlay.addEventListener('click', toggleRadarAnimation);

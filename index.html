@@ -85,11 +85,15 @@
 
             <section class="radar-section">
                 <h3>Radar de Chuva ao Vivo</h3>
-                <div class="radar-controls">
-                    <button id="radar-play" title="Play/Pause">▶️</button>
+                <div id="radar-map" class="radar-map"></div>
+                <div class="radar-timeline">
+                    <button id="radar-play" class="radar-play-btn" title="Play/Pause">▶</button>
+                    <div class="radar-slider-wrap">
+                        <input type="range" id="radar-slider" class="radar-slider" min="0" max="0" value="0" step="1">
+                        <div class="radar-timestamps" id="radar-timestamps"></div>
+                    </div>
                     <span id="radar-time" class="radar-time">--:--</span>
                 </div>
-                <div id="radar-map" class="radar-map"></div>
                 <div class="radar-legend">
                     <span class="legend-label">Leve</span>
                     <div class="legend-bar"></div>
