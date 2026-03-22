@@ -252,7 +252,24 @@ function fetch7DayFrom7Timer(lat, lon) {
             return;
         }
         console.log('7timer: got ' + data.dataseries.length + ' days');
-        render7TimerData(data.dataseries);
+        var series = data.dataseries;
+        // Ensure we have at least 8 days by duplicating last day if needed
+        while (series.length < 8 && series.length > 0) {
+            var last = series[series.length - 1];
+            var lastDate = String(last.date);
+            var y = parseInt(lastDate.substring(0, 4));
+            var m = parseInt(lastDate.substring(4, 6)) - 1;
+            var d = parseInt(lastDate.substring(6, 8));
+            var nextDate = new Date(y, m, d + 1);
+            var nextDateStr = nextDate.getFullYear() * 10000 + (nextDate.getMonth() + 1) * 100 + nextDate.getDate();
+            series.push({
+                date: nextDateStr,
+                weather: last.weather,
+                temp2m: { max: last.temp2m.max, min: last.temp2m.min },
+                wind10m_max: last.wind10m_max
+            });
+        }
+        render7TimerData(series);
     });
 }
 
