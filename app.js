@@ -282,8 +282,9 @@ function renderWeather(data, name, lat, lon) {
         shown++;
     });
 
-    // Daily forecast - 7 days from Open-Meteo
+    // Daily forecast - render wttr.in data first, then try 7 days from Open-Meteo
     elements.dailyContainer.innerHTML = '';
+    renderDailyFromWttr(data.weather);
     fetch7DayForecast(lat, lon);
 
     // Initialize radar
@@ -323,18 +324,69 @@ function getWmoWeather(code) {
     return wmoWeatherCodes[code] || { desc: 'Desconhecido', icon: '🌡️' };
 }
 
+function renderDailyFromWttr(weatherDays) {
+    if (!weatherDays || weatherDays.length === 0) return;
+    var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    elements.dailyContainer.innerHTML = '';
+
+    weatherDays.forEach(function(day, i) {
+        var date = new Date(day.date + 'T00:00:00');
+        var dayCode = parseInt(day.hourly[4] ? day.hourly[4].weatherCode : day.hourly[0].weatherCode) || 113;
+        var dayWeather = getWeatherInfo(dayCode);
+        var dayDesc = day.hourly[4] && day.hourly[4].lang_pt && day.hourly[4].lang_pt[0]
+            ? day.hourly[4].lang_pt[0].value : dayWeather.desc;
+        var maxTemp = Math.round(parseFloat(day.maxtempC));
+        var minTemp = Math.round(parseFloat(day.mintempC));
+        var avgHumidity = day.hourly.reduce(function(s, h) { return s + parseInt(h.humidity || 0); }, 0) / day.hourly.length;
+        var maxWind = Math.max.apply(null, day.hourly.map(function(h) { return parseInt(h.windspeedKmph || 0); }));
+        var totalPrecip = day.hourly.reduce(function(s, h) { return s + parseFloat(h.precipMM || 0); }, 0).toFixed(1);
+        var uvMax = Math.max.apply(null, day.hourly.map(function(h) { return parseInt(h.uvIndex || 0); }));
+
+        var card = document.createElement('div');
+        card.className = 'day-card';
+        card.innerHTML =
+            '<div class="day-card-header">' +
+                '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()] + ' ' + date.getDate()) + '</div>' +
+                '<div class="icon">' + dayWeather.icon + '</div>' +
+                '<div class="desc">' + dayDesc + '</div>' +
+                '<div class="temps">' +
+                    '<span class="temp-max">' + maxTemp + '°</span>' +
+                    '<span class="temp-min">' + minTemp + '°</span>' +
+                '</div>' +
+                '<span class="expand-arrow">▼</span>' +
+            '</div>' +
+            '<div class="day-card-details">' +
+                '<div class="day-detail-grid">' +
+                    '<div class="day-detail-item"><span class="label">Chuva</span><span class="value">' + totalPrecip + ' mm</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Umidade</span><span class="value">' + Math.round(avgHumidity) + '%</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Vento Máx</span><span class="value">' + maxWind + ' km/h</span></div>' +
+                    '<div class="day-detail-item"><span class="label">UV Máx</span><span class="value">' + uvMax + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Amplitude</span><span class="value">' + (maxTemp - minTemp) + '°C</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Condição</span><span class="value">' + dayDesc + '</span></div>' +
+                '</div>' +
+            '</div>';
+
+        card.addEventListener('click', function() {
+            this.classList.toggle('expanded');
+        });
+
+        elements.dailyContainer.appendChild(card);
+    });
+}
+
 function fetch7DayForecast(lat, lon) {
     var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
         '&timezone=auto&forecast_days=7';
 
     nativeGet(url, function(err, data) {
-        if (err || !data.daily) {
-            // Fallback - show empty
+        if (err || !data || !data.daily) {
+            // Keep wttr.in fallback data already rendered
             return;
         }
 
         var daily = data.daily;
+        if (!daily.time || daily.time.length === 0) return;
         var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
         elements.dailyContainer.innerHTML = '';
 
@@ -452,8 +504,9 @@ function initRadar(lat, lon) {
                 attributionControl: false,
             }).setView([lat, lon], 7);
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
                 maxZoom: 18,
+                subdomains: 'abcd',
             }).addTo(radarMap);
         }
 
