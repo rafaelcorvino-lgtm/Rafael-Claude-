@@ -144,9 +144,13 @@ function searchCities(query) {
 
 function searchAndFetch(query) {
     showLoading();
+    var url = GEOCODING_URL + '?name=' + encodeURIComponent(query) + '&count=1&language=pt';
+    showDebug('Buscando: ' + url);
     var xhr = new XMLHttpRequest();
-    xhr.open('GET', GEOCODING_URL + '?name=' + encodeURIComponent(query) + '&count=1&language=pt');
+    xhr.open('GET', url);
+    xhr.timeout = 15000;
     xhr.onload = function() {
+        showDebug('Resposta recebida: ' + xhr.status);
         try {
             var data = JSON.parse(xhr.responseText);
             if (!data.results || data.results.length === 0) {
@@ -160,9 +164,21 @@ function searchAndFetch(query) {
         }
     };
     xhr.onerror = function() {
-        showError('Erro de conexão ao buscar cidade. Verifique sua internet.');
+        showError('Erro de conexão (onerror). Status: ' + xhr.status + '. Verifique sua internet.');
+    };
+    xhr.ontimeout = function() {
+        showError('Timeout - servidor não respondeu em 15s.');
     };
     xhr.send();
+}
+
+function showDebug(msg) {
+    var errDiv = document.getElementById('error');
+    if (errDiv) {
+        errDiv.textContent = msg;
+        errDiv.classList.remove('hidden');
+        errDiv.style.color = '#4fc3f7';
+    }
 }
 
 function fetchWeather(lat, lon, name) {
@@ -175,7 +191,9 @@ function fetchWeather(lat, lon, name) {
 
     var xhr = new XMLHttpRequest();
     xhr.open('GET', WEATHER_URL + '?' + params);
+    xhr.timeout = 15000;
     xhr.onload = function() {
+        showDebug('Dados meteorológicos recebidos');
         try {
             var data = JSON.parse(xhr.responseText);
             renderWeather(data, name);
@@ -184,7 +202,10 @@ function fetchWeather(lat, lon, name) {
         }
     };
     xhr.onerror = function() {
-        showError('Erro de conexão. Verifique sua internet.');
+        showError('Erro de conexão clima (onerror). Status: ' + xhr.status);
+    };
+    xhr.ontimeout = function() {
+        showError('Timeout clima - servidor não respondeu em 15s.');
     };
     xhr.send();
 }
