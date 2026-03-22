@@ -10,7 +10,11 @@ import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.webkit.ConsoleMessage;
 import android.graphics.Color;
+import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -41,6 +45,11 @@ public class MainActivity extends Activity {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setGeolocationDatabasePath(getFilesDir().getPath());
+        settings.setAllowUniversalAccessFromFileURLs(true);
+        settings.setAllowFileAccessFromFileURLs(true);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
@@ -55,6 +64,14 @@ public class MainActivity extends Activity {
             public void onGeolocationPermissionsShowPrompt(String origin,
                     GeolocationPermissions.Callback callback) {
                 callback.invoke(origin, true, false);
+            }
+
+            @Override
+            public boolean onConsoleMessage(ConsoleMessage consoleMessage) {
+                android.util.Log.d("Meteorologia", consoleMessage.message()
+                    + " -- From line " + consoleMessage.lineNumber()
+                    + " of " + consoleMessage.sourceId());
+                return true;
             }
         });
 
