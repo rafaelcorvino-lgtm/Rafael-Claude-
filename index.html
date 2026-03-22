@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Meteorologia - Previsão do Tempo</title>
-    <meta name="description" content="App de previsão do tempo com radar meteorológico em tempo real">
+    <title>Meteo Corvino</title>
+    <meta name="description" content="Meteo Corvino - Previsão do tempo para aviação agrícola">
     <meta name="theme-color" content="#0f1923">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="Meteorologia">
+    <meta name="apple-mobile-web-app-title" content="Meteo Corvino">
     <link rel="manifest" href="manifest.json">
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -18,7 +18,7 @@
 <body>
     <div class="app">
         <header>
-            <h1>Previsão do Tempo</h1>
+            <h1>Meteo Corvino</h1>
             <div class="search-box">
                 <input type="text" id="city-input" placeholder="Digite o nome da cidade..." autocomplete="off">
                 <button id="search-btn" title="Buscar">
@@ -41,6 +41,100 @@
         </div>
 
         <div id="error" class="error hidden"></div>
+
+        <!-- Tela inicial com aviação agrícola -->
+        <section id="welcome-screen" class="welcome-screen">
+            <div class="welcome-hero">
+                <svg class="hero-plane" viewBox="0 0 400 200" xmlns="http://www.w3.org/2000/svg">
+                    <!-- Céu com gradiente -->
+                    <defs>
+                        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#1a3a5c"/>
+                            <stop offset="100%" stop-color="#2d5a3d"/>
+                        </linearGradient>
+                        <linearGradient id="sprayGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#4fc3f7" stop-opacity="0.6"/>
+                            <stop offset="100%" stop-color="#4fc3f7" stop-opacity="0"/>
+                        </linearGradient>
+                    </defs>
+                    <rect width="400" height="200" fill="url(#skyGrad)" rx="12"/>
+                    <!-- Campo/lavoura -->
+                    <path d="M0 160 Q50 145 100 155 Q150 140 200 150 Q250 138 300 148 Q350 135 400 145 L400 200 L0 200Z" fill="#1a4a28" opacity="0.8"/>
+                    <path d="M0 170 Q80 158 160 165 Q240 155 320 162 Q360 158 400 160 L400 200 L0 200Z" fill="#0d3518" opacity="0.6"/>
+                    <!-- Linhas da plantação -->
+                    <line x1="20" y1="175" x2="380" y2="165" stroke="#1a5a2a" stroke-width="0.5" opacity="0.4"/>
+                    <line x1="20" y1="180" x2="380" y2="170" stroke="#1a5a2a" stroke-width="0.5" opacity="0.4"/>
+                    <line x1="20" y1="185" x2="380" y2="175" stroke="#1a5a2a" stroke-width="0.5" opacity="0.4"/>
+                    <line x1="20" y1="190" x2="380" y2="180" stroke="#1a5a2a" stroke-width="0.5" opacity="0.4"/>
+                    <!-- Avião pulverizador -->
+                    <g transform="translate(120, 70) rotate(-5)">
+                        <!-- Fuselagem -->
+                        <ellipse cx="60" cy="12" rx="50" ry="7" fill="#d4d4d4"/>
+                        <!-- Cabine -->
+                        <path d="M70 5 Q80 0 85 5 L85 12 Q80 8 70 10Z" fill="#4fc3f7" opacity="0.7"/>
+                        <!-- Asa superior -->
+                        <rect x="30" y="2" width="55" height="3" rx="1.5" fill="#b0b0b0"/>
+                        <!-- Asa inferior -->
+                        <rect x="30" y="18" width="55" height="3" rx="1.5" fill="#b0b0b0"/>
+                        <!-- Suportes entre asas -->
+                        <line x1="40" y1="5" x2="40" y2="18" stroke="#888" stroke-width="1"/>
+                        <line x1="55" y1="5" x2="55" y2="18" stroke="#888" stroke-width="1"/>
+                        <line x1="70" y1="5" x2="70" y2="18" stroke="#888" stroke-width="1"/>
+                        <!-- Motor/hélice -->
+                        <circle cx="110" cy="12" r="4" fill="#888"/>
+                        <line x1="110" y1="4" x2="110" y2="20" stroke="#aaa" stroke-width="1.5" opacity="0.6"/>
+                        <!-- Cauda -->
+                        <path d="M10 12 L2 2 L15 10Z" fill="#c0c0c0"/>
+                        <path d="M10 12 L5 20 L15 14Z" fill="#c0c0c0"/>
+                        <!-- Trem de pouso -->
+                        <line x1="45" y1="21" x2="42" y2="28" stroke="#888" stroke-width="1.5"/>
+                        <line x1="75" y1="21" x2="72" y2="28" stroke="#888" stroke-width="1.5"/>
+                        <circle cx="42" cy="29" r="2" fill="#666"/>
+                        <circle cx="72" cy="29" r="2" fill="#666"/>
+                        <!-- Spray/pulverização -->
+                        <g opacity="0.5">
+                            <line x1="30" y1="22" x2="28" y2="65" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="38" y1="22" x2="36" y2="68" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="46" y1="22" x2="44" y2="70" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="54" y1="22" x2="52" y2="70" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="62" y1="22" x2="60" y2="68" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="70" y1="22" x2="68" y2="65" stroke="url(#sprayGrad)" stroke-width="2"/>
+                            <line x1="78" y1="22" x2="76" y2="60" stroke="url(#sprayGrad)" stroke-width="2"/>
+                        </g>
+                    </g>
+                    <!-- Sol -->
+                    <circle cx="340" cy="40" r="20" fill="#ffd54f" opacity="0.3"/>
+                    <circle cx="340" cy="40" r="14" fill="#ffd54f" opacity="0.5"/>
+                    <!-- Nuvens pequenas -->
+                    <g opacity="0.15">
+                        <ellipse cx="80" cy="35" rx="25" ry="8" fill="white"/>
+                        <ellipse cx="280" cy="55" rx="20" ry="6" fill="white"/>
+                    </g>
+                </svg>
+            </div>
+            <div class="welcome-text">
+                <p class="welcome-subtitle">Previsão meteorológica para aviação agrícola</p>
+                <p class="welcome-hint">Busque uma cidade ou use sua localização para começar</p>
+            </div>
+            <div class="welcome-features">
+                <div class="feature-item">
+                    <span class="feature-icon">🌡️</span>
+                    <span>Temperatura e umidade</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">💨</span>
+                    <span>Vento e visibilidade</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🌧️</span>
+                    <span>Radar de chuva ao vivo</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📅</span>
+                    <span>Previsão de 7 dias</span>
+                </div>
+            </div>
+        </section>
 
         <main id="weather-content" class="hidden">
             <section class="current-weather">

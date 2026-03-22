@@ -1,7 +1,7 @@
 {
-  "name": "Meteorologia - Previsão do Tempo",
-  "short_name": "Meteorologia",
-  "description": "App de previsão do tempo com radar meteorológico em tempo real",
+  "name": "Meteo Corvino",
+  "short_name": "Meteo Corvino",
+  "description": "Meteo Corvino - Previsão do tempo para aviação agrícola",
   "start_url": "/index.html",
   "display": "standalone",
   "orientation": "portrait",

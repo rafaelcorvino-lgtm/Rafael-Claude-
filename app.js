@@ -1,5 +1,6 @@
 var GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 var WTTR_URL = 'https://wttr.in';
+var OPENMETEO_URL = 'https://api.open-meteo.com/v1/forecast';
 
 // Global error handler
 window.onerror = function(msg, url, line) {
@@ -37,6 +38,7 @@ var elements = {
     radarTime: document.getElementById('radar-time'),
     radarSlider: document.getElementById('radar-slider'),
     radarTimestamps: document.getElementById('radar-timestamps'),
+    welcomeScreen: document.getElementById('welcome-screen'),
 };
 
 // WWO weather codes (used by wttr.in)
@@ -222,6 +224,7 @@ function renderWeather(data, name, lat, lon) {
     hideLoading();
     elements.error.classList.add('hidden');
     elements.content.classList.remove('hidden');
+    elements.welcomeScreen.classList.add('hidden');
 
     var current = data.current_condition[0];
     var code = parseInt(current.weatherCode) || 113;
@@ -279,27 +282,9 @@ function renderWeather(data, name, lat, lon) {
         shown++;
     });
 
-    // Daily forecast
+    // Daily forecast - 7 days from Open-Meteo
     elements.dailyContainer.innerHTML = '';
-    var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-    data.weather.forEach(function(day, i) {
-        var date = new Date(day.date + 'T00:00:00');
-        var dayCode = parseInt(day.hourly[4] ? day.hourly[4].weatherCode : day.hourly[0].weatherCode) || 113;
-        var dayWeather = getWeatherInfo(dayCode);
-        var dayDesc = day.hourly[4] && day.hourly[4].lang_pt && day.hourly[4].lang_pt[0]
-            ? day.hourly[4].lang_pt[0].value : dayWeather.desc;
-        var card = document.createElement('div');
-        card.className = 'day-card';
-        card.innerHTML =
-            '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()]) + '</div>' +
-            '<div class="icon">' + dayWeather.icon + '</div>' +
-            '<div class="desc">' + dayDesc + '</div>' +
-            '<div class="temps">' +
-                '<span class="temp-max">' + Math.round(parseFloat(day.maxtempC)) + '°</span>' +
-                '<span class="temp-min">' + Math.round(parseFloat(day.mintempC)) + '°</span>' +
-            '</div>';
-        elements.dailyContainer.appendChild(card);
-    });
+    fetch7DayForecast(lat, lon);
 
     // Initialize radar
     if (typeof L !== 'undefined') {
@@ -307,6 +292,109 @@ function renderWeather(data, name, lat, lon) {
     } else {
         try { document.querySelector('.radar-section').style.display = 'none'; } catch(e) {}
     }
+}
+
+// WMO weather code mapping for Open-Meteo
+var wmoWeatherCodes = {
+    0: { desc: 'Céu limpo', icon: '☀️' },
+    1: { desc: 'Predominantemente limpo', icon: '🌤️' },
+    2: { desc: 'Parcialmente nublado', icon: '⛅' },
+    3: { desc: 'Nublado', icon: '☁️' },
+    45: { desc: 'Neblina', icon: '🌫️' },
+    48: { desc: 'Neblina com geada', icon: '🌫️' },
+    51: { desc: 'Garoa leve', icon: '🌦️' },
+    53: { desc: 'Garoa moderada', icon: '🌦️' },
+    55: { desc: 'Garoa intensa', icon: '🌧️' },
+    61: { desc: 'Chuva leve', icon: '🌦️' },
+    63: { desc: 'Chuva moderada', icon: '🌧️' },
+    65: { desc: 'Chuva forte', icon: '🌧️' },
+    71: { desc: 'Neve leve', icon: '🌨️' },
+    73: { desc: 'Neve moderada', icon: '🌨️' },
+    75: { desc: 'Neve forte', icon: '❄️' },
+    80: { desc: 'Pancadas leves', icon: '🌦️' },
+    81: { desc: 'Pancadas moderadas', icon: '🌧️' },
+    82: { desc: 'Pancadas fortes', icon: '⛈️' },
+    95: { desc: 'Tempestade', icon: '⛈️' },
+    96: { desc: 'Tempestade com granizo', icon: '⛈️' },
+    99: { desc: 'Tempestade com granizo forte', icon: '⛈️' }
+};
+
+function getWmoWeather(code) {
+    return wmoWeatherCodes[code] || { desc: 'Desconhecido', icon: '🌡️' };
+}
+
+function fetch7DayForecast(lat, lon) {
+    var url = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
+        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
+        '&timezone=auto&forecast_days=7';
+
+    nativeGet(url, function(err, data) {
+        if (err || !data.daily) {
+            // Fallback - show empty
+            return;
+        }
+
+        var daily = data.daily;
+        var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+        elements.dailyContainer.innerHTML = '';
+
+        for (var i = 0; i < daily.time.length; i++) {
+            var date = new Date(daily.time[i] + 'T00:00:00');
+            var wmoCode = daily.weather_code[i];
+            var weather = getWmoWeather(wmoCode);
+            var maxTemp = Math.round(daily.temperature_2m_max[i]);
+            var minTemp = Math.round(daily.temperature_2m_min[i]);
+            var precip = daily.precipitation_sum[i];
+            var windMax = Math.round(daily.wind_speed_10m_max[i]);
+            var windDir = daily.wind_direction_10m_dominant[i];
+            var uvMax = daily.uv_index_max[i];
+            var precipProb = daily.precipitation_probability_max[i];
+            var sunrise = daily.sunrise[i] ? daily.sunrise[i].split('T')[1] : '--:--';
+            var sunset = daily.sunset[i] ? daily.sunset[i].split('T')[1] : '--:--';
+
+            var windDirText = getWindDirection(windDir);
+
+            var card = document.createElement('div');
+            card.className = 'day-card';
+            card.innerHTML =
+                '<div class="day-card-header">' +
+                    '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()] + ' ' + date.getDate()) + '</div>' +
+                    '<div class="icon">' + weather.icon + '</div>' +
+                    '<div class="desc">' + weather.desc + '</div>' +
+                    '<div class="temps">' +
+                        '<span class="temp-max">' + maxTemp + '°</span>' +
+                        '<span class="temp-min">' + minTemp + '°</span>' +
+                    '</div>' +
+                    '<span class="expand-arrow">▼</span>' +
+                '</div>' +
+                '<div class="day-card-details">' +
+                    '<div class="day-detail-grid">' +
+                        '<div class="day-detail-item"><span class="label">Chuva</span><span class="value">' + precip + ' mm</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Prob. Chuva</span><span class="value">' + precipProb + '%</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Vento Máx</span><span class="value">' + windMax + ' km/h</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Dir. Vento</span><span class="value">' + windDirText + '</span></div>' +
+                        '<div class="day-detail-item"><span class="label">UV Máx</span><span class="value">' + uvMax + '</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Amplitude</span><span class="value">' + (maxTemp - minTemp) + '°C</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Nascer do Sol</span><span class="value">' + sunrise + '</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Pôr do Sol</span><span class="value">' + sunset + '</span></div>' +
+                        '<div class="day-detail-item"><span class="label">Condição</span><span class="value">' + weather.desc + '</span></div>' +
+                    '</div>' +
+                '</div>';
+
+            card.addEventListener('click', function() {
+                this.classList.toggle('expanded');
+            });
+
+            elements.dailyContainer.appendChild(card);
+        }
+    });
+}
+
+function getWindDirection(degrees) {
+    if (degrees == null) return '--';
+    var dirs = ['N', 'NE', 'L', 'SE', 'S', 'SO', 'O', 'NO'];
+    var idx = Math.round(degrees / 45) % 8;
+    return dirs[idx];
 }
 
 function formatDate(date) {
@@ -318,6 +406,7 @@ function showLoading() {
     elements.loading.classList.remove('hidden');
     elements.content.classList.add('hidden');
     elements.error.classList.add('hidden');
+    elements.welcomeScreen.classList.add('hidden');
 }
 
 function hideLoading() {
