@@ -1,6 +1,6 @@
 var GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
-var WEATHER_URL = 'https://api.open-meteo.com/v1/forecast';
-var RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+var WEATHER_URL = 'http://api.open-meteo.com/v1/forecast';
+var RAINVIEWER_URL = 'http://api.rainviewer.com/public/weather-maps.json';
 
 // Global error handler - shows errors on screen for debugging
 window.onerror = function(msg, url, line) {
