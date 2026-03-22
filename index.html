@@ -13,7 +13,7 @@
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
     <link rel="apple-touch-icon" href="icons/icon-192.png">
     <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet removed - radar disabled due to network restrictions -->
 </head>
 <body>
     <div class="app">
@@ -83,19 +83,10 @@
                 </div>
             </section>
 
-            <section class="radar-section">
-                <h3>Radar Meteorológico</h3>
-                <div class="radar-controls">
-                    <button id="radar-play" title="Play/Pause">▶️</button>
-                    <span id="radar-time" class="radar-time">--:--</span>
-                </div>
-                <div id="radar-map" class="radar-map"></div>
-                <div class="radar-legend">
-                    <span class="legend-label">Leve</span>
-                    <div class="legend-bar"></div>
-                    <span class="legend-label">Forte</span>
-                </div>
-            </section>
+            <!-- Radar hidden - elements kept for JS compatibility -->
+            <div id="radar-map" class="hidden"></div>
+            <button id="radar-play" class="hidden"></button>
+            <span id="radar-time" class="hidden"></span>
 
             <section class="hourly-forecast">
                 <h3>Próximas Horas</h3>
@@ -103,18 +94,15 @@
             </section>
 
             <section class="daily-forecast">
-                <h3>Próximos 7 Dias</h3>
+                <h3>Próximos Dias</h3>
                 <div id="daily-container" class="daily-container"></div>
             </section>
         </main>
     </div>
 
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="app.js"></script>
     <script>
-        if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.register('/sw.js');
-        }
+        // Service Worker disabled in APK (file:// protocol)
     </script>
 </body>
 </html>
