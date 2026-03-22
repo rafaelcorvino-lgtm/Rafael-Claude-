@@ -73,6 +73,42 @@ function getWeatherInfo(code) {
     return weatherCodes[code] || { desc: 'Desconhecido', icon: '❓' };
 }
 
+// Native HTTP bridge - uses Android's HttpURLConnection via JavaScriptInterface
+// This bypasses WebView network restrictions
+function nativeGet(url, callback) {
+    if (typeof NativeBridge !== 'undefined') {
+        // Run on a separate thread via setTimeout to not block UI
+        setTimeout(function() {
+            try {
+                var response = NativeBridge.httpGet(url);
+                var data = JSON.parse(response);
+                if (data._error) {
+                    callback(data._message, null);
+                } else {
+                    callback(null, data);
+                }
+            } catch(e) {
+                callback('Erro ao processar: ' + e.message, null);
+            }
+        }, 0);
+    } else {
+        // Fallback to XHR (for browser testing)
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', url);
+        xhr.timeout = 15000;
+        xhr.onload = function() {
+            try {
+                callback(null, JSON.parse(xhr.responseText));
+            } catch(e) {
+                callback('Erro ao processar: ' + e.message, null);
+            }
+        };
+        xhr.onerror = function() { callback('Erro de conexão', null); };
+        xhr.ontimeout = function() { callback('Timeout', null); };
+        xhr.send();
+    }
+}
+
 var searchTimeout = null;
 
 // Search city
@@ -111,65 +147,43 @@ elements.locationBtn.addEventListener('click', function() {
 });
 
 function searchCities(query) {
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', GEOCODING_URL + '?name=' + encodeURIComponent(query) + '&count=5&language=pt');
-    xhr.onload = function() {
-        try {
-            var data = JSON.parse(xhr.responseText);
-            if (!data.results || data.results.length === 0) {
-                elements.suggestions.classList.add('hidden');
-                return;
-            }
-            elements.suggestions.innerHTML = '';
-            data.results.forEach(function(city) {
-                var li = document.createElement('li');
-                li.innerHTML = city.name + ' <span class="country">' + (city.admin1 || '') + ', ' + (city.country || '') + '</span>';
-                li.addEventListener('click', function() {
-                    elements.cityInput.value = city.name;
-                    elements.suggestions.classList.add('hidden');
-                    fetchWeather(city.latitude, city.longitude, city.name + ', ' + (city.country || ''));
-                });
-                elements.suggestions.appendChild(li);
-            });
-            elements.suggestions.classList.remove('hidden');
-        } catch(e) {
+    var url = GEOCODING_URL + '?name=' + encodeURIComponent(query) + '&count=5&language=pt';
+    nativeGet(url, function(err, data) {
+        if (err || !data.results || data.results.length === 0) {
             elements.suggestions.classList.add('hidden');
+            return;
         }
-    };
-    xhr.onerror = function() {
-        elements.suggestions.classList.add('hidden');
-    };
-    xhr.send();
+        elements.suggestions.innerHTML = '';
+        data.results.forEach(function(city) {
+            var li = document.createElement('li');
+            li.innerHTML = city.name + ' <span class="country">' + (city.admin1 || '') + ', ' + (city.country || '') + '</span>';
+            li.addEventListener('click', function() {
+                elements.cityInput.value = city.name;
+                elements.suggestions.classList.add('hidden');
+                fetchWeather(city.latitude, city.longitude, city.name + ', ' + (city.country || ''));
+            });
+            elements.suggestions.appendChild(li);
+        });
+        elements.suggestions.classList.remove('hidden');
+    });
 }
 
 function searchAndFetch(query) {
     showLoading();
     var url = GEOCODING_URL + '?name=' + encodeURIComponent(query) + '&count=1&language=pt';
-    showDebug('Buscando: ' + url);
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', url);
-    xhr.timeout = 15000;
-    xhr.onload = function() {
-        showDebug('Resposta recebida: ' + xhr.status);
-        try {
-            var data = JSON.parse(xhr.responseText);
-            if (!data.results || data.results.length === 0) {
-                showError('Cidade "' + query + '" não encontrada.');
-                return;
-            }
-            var city = data.results[0];
-            fetchWeather(city.latitude, city.longitude, city.name + ', ' + (city.country || ''));
-        } catch(e) {
-            showError('Erro ao processar resposta: ' + e.message);
+    showDebug('Buscando cidade...');
+    nativeGet(url, function(err, data) {
+        if (err) {
+            showError('Erro ao buscar cidade: ' + err);
+            return;
         }
-    };
-    xhr.onerror = function() {
-        showError('Erro de conexão (onerror). Status: ' + xhr.status + '. Verifique sua internet.');
-    };
-    xhr.ontimeout = function() {
-        showError('Timeout - servidor não respondeu em 15s.');
-    };
-    xhr.send();
+        if (!data.results || data.results.length === 0) {
+            showError('Cidade "' + query + '" não encontrada.');
+            return;
+        }
+        var city = data.results[0];
+        fetchWeather(city.latitude, city.longitude, city.name + ', ' + (city.country || ''));
+    });
 }
 
 function showDebug(msg) {
@@ -183,31 +197,20 @@ function showDebug(msg) {
 
 function fetchWeather(lat, lon, name) {
     showLoading();
+    showDebug('Carregando clima...');
     var params = 'latitude=' + lat + '&longitude=' + lon +
         '&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,uv_index,visibility' +
         '&hourly=temperature_2m,weather_code' +
         '&daily=weather_code,temperature_2m_max,temperature_2m_min' +
         '&timezone=auto&forecast_days=7';
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', WEATHER_URL + '?' + params);
-    xhr.timeout = 15000;
-    xhr.onload = function() {
-        showDebug('Dados meteorológicos recebidos');
-        try {
-            var data = JSON.parse(xhr.responseText);
-            renderWeather(data, name);
-        } catch(e) {
-            showError('Erro ao processar dados: ' + e.message);
+    nativeGet(WEATHER_URL + '?' + params, function(err, data) {
+        if (err) {
+            showError('Erro ao buscar clima: ' + err);
+            return;
         }
-    };
-    xhr.onerror = function() {
-        showError('Erro de conexão clima (onerror). Status: ' + xhr.status);
-    };
-    xhr.ontimeout = function() {
-        showError('Timeout clima - servidor não respondeu em 15s.');
-    };
-    xhr.send();
+        renderWeather(data, name);
+    });
 }
 
 function renderWeather(data, name) {
@@ -299,6 +302,7 @@ function showError(msg) {
     hideLoading();
     elements.content.classList.add('hidden');
     elements.error.textContent = msg;
+    elements.error.style.color = '';
     elements.error.classList.remove('hidden');
 }
 
@@ -343,11 +347,12 @@ function initRadar(lat, lon) {
         radarIndex = 0;
         stopRadarAnimation();
 
-        var xhr = new XMLHttpRequest();
-        xhr.open('GET', RAINVIEWER_URL);
-        xhr.onload = function() {
+        nativeGet(RAINVIEWER_URL, function(err, data) {
+            if (err) {
+                elements.radarTime.textContent = 'Radar indisponível';
+                return;
+            }
             try {
-                var data = JSON.parse(xhr.responseText);
                 var past = data.radar.past || [];
                 var nowcast = data.radar.nowcast || [];
                 radarFrames = past.concat(nowcast);
@@ -368,11 +373,7 @@ function initRadar(lat, lon) {
             } catch(e) {
                 elements.radarTime.textContent = 'Radar indisponível';
             }
-        };
-        xhr.onerror = function() {
-            elements.radarTime.textContent = 'Radar indisponível';
-        };
-        xhr.send();
+        });
 
         // Fix map rendering after container becomes visible
         setTimeout(function() { if (radarMap) radarMap.invalidateSize(); }, 100);

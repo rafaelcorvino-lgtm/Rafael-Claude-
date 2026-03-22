@@ -12,11 +12,15 @@ import android.webkit.WebViewClient;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.ConsoleMessage;
+import android.webkit.JavascriptInterface;
 import android.graphics.Color;
 import android.os.Build;
-import android.net.Uri;
 import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.IOException;
+import java.net.HttpURLConnection;
+import java.net.URL;
 
 public class MainActivity extends Activity {
     private WebView webView;
@@ -54,8 +58,10 @@ public class MainActivity extends Activity {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
 
+        // Add JavaScript bridge for native HTTP calls
+        webView.addJavascriptInterface(new WebBridge(), "NativeBridge");
+
         webView.setWebViewClient(new WebViewClient() {
-            // API 21+ version (WebResourceRequest)
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
@@ -66,7 +72,6 @@ public class MainActivity extends Activity {
                 return super.shouldInterceptRequest(view, request);
             }
 
-            // Legacy version (String url) for older WebViews
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, String url) {
                 WebResourceResponse localResponse = serveLocalAsset(url);
@@ -106,15 +111,53 @@ public class MainActivity extends Activity {
         webView.loadUrl(LOCAL_HOST + "index.html");
     }
 
+    /**
+     * JavaScript bridge that performs HTTP GET requests natively.
+     * This bypasses WebView's network restrictions.
+     */
+    private class WebBridge {
+        @JavascriptInterface
+        public String httpGet(String urlStr) {
+            HttpURLConnection conn = null;
+            try {
+                URL url = new URL(urlStr);
+                conn = (HttpURLConnection) url.openConnection();
+                conn.setRequestMethod("GET");
+                conn.setConnectTimeout(15000);
+                conn.setReadTimeout(15000);
+                conn.setRequestProperty("Accept", "application/json");
+
+                int code = conn.getResponseCode();
+                if (code != 200) {
+                    return "{\"_error\": true, \"_message\": \"HTTP " + code + "\"}";
+                }
+
+                BufferedReader reader = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), "UTF-8"));
+                StringBuilder sb = new StringBuilder();
+                String line;
+                while ((line = reader.readLine()) != null) {
+                    sb.append(line);
+                }
+                reader.close();
+                return sb.toString();
+            } catch (Exception e) {
+                return "{\"_error\": true, \"_message\": \"" +
+                    e.getClass().getSimpleName() + ": " +
+                    e.getMessage().replace("\"", "'") + "\"}";
+            } finally {
+                if (conn != null) conn.disconnect();
+            }
+        }
+    }
+
     private WebResourceResponse serveLocalAsset(String url) {
         if (url != null && url.startsWith(LOCAL_HOST)) {
             String path = url.substring(LOCAL_HOST.length());
-            // Remove query string if present
             int queryIdx = path.indexOf('?');
             if (queryIdx >= 0) {
                 path = path.substring(0, queryIdx);
             }
-            // Remove fragment
             int fragIdx = path.indexOf('#');
             if (fragIdx >= 0) {
                 path = path.substring(0, fragIdx);
