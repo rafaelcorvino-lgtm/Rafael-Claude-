@@ -1,6 +1,6 @@
 var GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search';
 var WTTR_URL = 'https://wttr.in';
-var OPENMETEO_URL = 'https://api.open-meteo.com/v1/forecast';
+var TIMER7_URL = 'http://www.7timer.info/bin/civillight.php';
 
 // Global error handler
 window.onerror = function(msg, url, line) {
@@ -216,40 +216,96 @@ function fetchWeather(lat, lon, name) {
             return;
         }
         renderWeather(data, name, lat, lon);
-        // Fetch 7-day forecast via Java proxy (bypasses CORS/TLS issues)
-        fetch7DayViaProxy(lat, lon);
+        // Fetch 7-day forecast from 7timer.info (same nativeGet that works for wttr.in)
+        fetch7DayFrom7Timer(lat, lon);
     });
 }
 
-function fetch7DayViaProxy(lat, lon) {
-    var openMeteoUrl = OPENMETEO_URL + '?latitude=' + lat + '&longitude=' + lon +
-        '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,wind_speed_10m_max,wind_direction_10m_dominant,uv_index_max,precipitation_probability_max,sunrise,sunset' +
-        '&timezone=auto&forecast_days=7';
-    var proxyUrl = 'api/proxy?url=' + encodeURIComponent(openMeteoUrl);
-    console.log('Fetching 7-day via proxy');
+// 7timer weather string to icon/description mapping
+var timer7Weather = {
+    'clear': { icon: '☀️', desc: 'Céu limpo' },
+    'pcloudy': { icon: '🌤️', desc: 'Parcialmente nublado' },
+    'mcloudy': { icon: '⛅', desc: 'Nublado parcial' },
+    'cloudy': { icon: '☁️', desc: 'Nublado' },
+    'humid': { icon: '🌫️', desc: 'Úmido' },
+    'lightrain': { icon: '🌦️', desc: 'Chuva leve' },
+    'oshower': { icon: '🌦️', desc: 'Pancadas ocasionais' },
+    'ishower': { icon: '🌦️', desc: 'Pancadas isoladas' },
+    'lightsnow': { icon: '🌨️', desc: 'Neve leve' },
+    'rain': { icon: '🌧️', desc: 'Chuva' },
+    'snow': { icon: '❄️', desc: 'Neve' },
+    'rainsnow': { icon: '🌨️', desc: 'Chuva com neve' },
+    'ts': { icon: '⛈️', desc: 'Tempestade' },
+    'tsrain': { icon: '⛈️', desc: 'Tempestade com chuva' }
+};
 
-    var xhr = new XMLHttpRequest();
-    xhr.open('GET', proxyUrl);
-    xhr.timeout = 20000;
-    xhr.onload = function() {
-        console.log('Proxy response: status=' + xhr.status + ' len=' + xhr.responseText.length);
-        try {
-            var d = JSON.parse(xhr.responseText);
-            if (d._error) {
-                console.log('Proxy error: ' + d._message);
-                return;
-            }
-            if (d && d.daily && d.daily.time && d.daily.time.length > 0) {
-                console.log('Got ' + d.daily.time.length + ' days from proxy');
-                render7DayData(d.daily);
-            }
-        } catch(e) {
-            console.log('Proxy parse error: ' + e.message);
+function fetch7DayFrom7Timer(lat, lon) {
+    var url = TIMER7_URL + '?lon=' + lon + '&lat=' + lat + '&ac=0&unit=metric&output=json';
+    console.log('Fetching 7timer: ' + url);
+    nativeGet(url, function(err, data) {
+        if (err) {
+            console.log('7timer error: ' + err);
+            return;
         }
-    };
-    xhr.onerror = function() { console.log('Proxy XHR onerror'); };
-    xhr.ontimeout = function() { console.log('Proxy XHR timeout'); };
-    xhr.send();
+        if (!data || !data.dataseries || data.dataseries.length === 0) {
+            console.log('7timer: no dataseries');
+            return;
+        }
+        console.log('7timer: got ' + data.dataseries.length + ' days');
+        render7TimerData(data.dataseries);
+    });
+}
+
+function render7TimerData(dataseries) {
+    var dayNames = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    elements.dailyContainer.innerHTML = '';
+
+    // Only show 7 days
+    var days = dataseries.slice(0, 7);
+
+    for (var i = 0; i < days.length; i++) {
+        var day = days[i];
+        // 7timer date format: 20260322
+        var dateStr = String(day.date);
+        var year = parseInt(dateStr.substring(0, 4));
+        var month = parseInt(dateStr.substring(4, 6)) - 1;
+        var dayNum = parseInt(dateStr.substring(6, 8));
+        var date = new Date(year, month, dayNum);
+
+        var weatherInfo = timer7Weather[day.weather] || { icon: '🌡️', desc: day.weather };
+        var maxTemp = day.temp2m ? day.temp2m.max : '--';
+        var minTemp = day.temp2m ? day.temp2m.min : '--';
+        // wind10m_max: 1=calm, 2=light, 3=moderate, 4=fresh, 5=strong, 6=gale, 7=storm, 8=hurricane
+        var windLabels = ['', 'Calmo', 'Leve', 'Moderado', 'Fresco', 'Forte', 'Vendaval', 'Tempestade', 'Furacão'];
+        var windLabel = windLabels[day.wind10m_max] || '--';
+
+        var card = document.createElement('div');
+        card.className = 'day-card';
+        card.innerHTML =
+            '<div class="day-card-header">' +
+                '<div class="day-name">' + (i === 0 ? 'Hoje' : dayNames[date.getDay()] + ' ' + date.getDate()) + '</div>' +
+                '<div class="icon">' + weatherInfo.icon + '</div>' +
+                '<div class="desc">' + weatherInfo.desc + '</div>' +
+                '<div class="temps">' +
+                    '<span class="temp-max">' + maxTemp + '°</span>' +
+                    '<span class="temp-min">' + minTemp + '°</span>' +
+                '</div>' +
+                '<span class="expand-arrow">▼</span>' +
+            '</div>' +
+            '<div class="day-card-details">' +
+                '<div class="day-detail-grid">' +
+                    '<div class="day-detail-item"><span class="label">Vento</span><span class="value">' + windLabel + '</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Amplitude</span><span class="value">' + (maxTemp - minTemp) + '°C</span></div>' +
+                    '<div class="day-detail-item"><span class="label">Condição</span><span class="value">' + weatherInfo.desc + '</span></div>' +
+                '</div>' +
+            '</div>';
+
+        card.addEventListener('click', function() {
+            this.classList.toggle('expanded');
+        });
+
+        elements.dailyContainer.appendChild(card);
+    }
 }
 
 function renderWeather(data, name, lat, lon) {
