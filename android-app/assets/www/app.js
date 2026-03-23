@@ -591,16 +591,18 @@ function initRadar(lat, lon) {
         document.querySelector('.radar-section').style.display = '';
 
         if (radarMap) {
-            radarMap.setView([lat, lon], 7);
+            radarMap.setView([lat, lon], 9);
         } else {
             radarMap = L.map('radar-map', {
                 zoomControl: true,
                 attributionControl: false,
-            }).setView([lat, lon], 7);
+            }).setView([lat, lon], 9);
 
-            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png', {
-                maxZoom: 18,
+            L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {
+                maxZoom: 19,
                 subdomains: 'abcd',
+                tileSize: 256,
+                detectRetina: true,
             }).addTo(radarMap);
         }
 
@@ -641,7 +643,7 @@ function initRadar(lat, lon) {
 
                 radarFrames.forEach(function(frame) {
                     var layer = L.tileLayer(
-                        data.host + frame.path + '/256/{z}/{x}/{y}/4/1_1.png',
+                        data.host + frame.path + '/512/{z}/{x}/{y}/4/1_1.png',
                         { opacity: 0, zIndex: 10 }
                     );
                     radarLayers.push(layer);
