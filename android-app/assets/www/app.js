@@ -97,9 +97,32 @@ function getWeatherInfo(code) {
     return weatherCodes[code] || { desc: 'Desconhecido', icon: '❓' };
 }
 
-// Native HTTP bridge
+// Native HTTP bridge - async callbacks via NativeBridge
+var _nativeCallbacks = {};
+var _nativeCallbackId = 0;
+
+function _nativeCallback(id, responseStr) {
+    var cb = _nativeCallbacks[id];
+    if (!cb) return;
+    delete _nativeCallbacks[id];
+    try {
+        var data = JSON.parse(responseStr);
+        if (data._error) {
+            cb(data._message, null);
+        } else {
+            cb(null, data);
+        }
+    } catch(e) {
+        cb('Erro ao processar: ' + e.message, null);
+    }
+}
+
 function nativeGet(url, callback) {
-    if (typeof NativeBridge !== 'undefined') {
+    if (typeof NativeBridge !== 'undefined' && typeof NativeBridge.httpGetAsync === 'function') {
+        var id = 'cb_' + (++_nativeCallbackId);
+        _nativeCallbacks[id] = callback;
+        NativeBridge.httpGetAsync(url, id);
+    } else if (typeof NativeBridge !== 'undefined') {
         setTimeout(function() {
             try {
                 var response = NativeBridge.httpGet(url);
@@ -116,7 +139,7 @@ function nativeGet(url, callback) {
     } else {
         var xhr = new XMLHttpRequest();
         xhr.open('GET', url);
-        xhr.timeout = 15000;
+        xhr.timeout = 10000;
         xhr.onload = function() {
             try { callback(null, JSON.parse(xhr.responseText)); }
             catch(e) { callback('Erro: ' + e.message, null); }
@@ -669,11 +692,12 @@ function initRadar(lat, lon) {
             }
         });
 
-        // Load weather stations on the map
-        loadWeatherStations(lat, lon);
-
-        // Fix map rendering
-        setTimeout(function() { if (radarMap) radarMap.invalidateSize(); }, 200);
+        // Fix map rendering first, then load data
+        setTimeout(function() {
+            if (radarMap) radarMap.invalidateSize();
+            // Load stations after map is visible (non-blocking)
+            setTimeout(function() { loadWeatherStations(lat, lon); }, 100);
+        }, 200);
     } catch(e) {
         elements.radarTime.textContent = 'Sem radar';
     }
@@ -688,22 +712,16 @@ function loadWeatherStations(lat, lon) {
     stationMarkers.forEach(function(m) { radarMap.removeLayer(m); });
     stationMarkers = [];
 
-    // Generate station points in a grid around the location (~50km spacing)
+    // Generate station points around the location (~50km spacing)
     var stations = [];
     var offsets = [
         { dlat: 0, dlon: 0 },
-        { dlat: 0.45, dlon: 0 },
-        { dlat: -0.45, dlon: 0 },
-        { dlat: 0, dlon: 0.45 },
-        { dlat: 0, dlon: -0.45 },
-        { dlat: 0.32, dlon: 0.32 },
-        { dlat: -0.32, dlon: 0.32 },
-        { dlat: 0.32, dlon: -0.32 },
-        { dlat: -0.32, dlon: -0.32 },
-        { dlat: 0.7, dlon: 0 },
-        { dlat: -0.7, dlon: 0 },
-        { dlat: 0, dlon: 0.7 },
-        { dlat: 0, dlon: -0.7 },
+        { dlat: 0.4, dlon: 0 },
+        { dlat: -0.4, dlon: 0 },
+        { dlat: 0, dlon: 0.4 },
+        { dlat: 0, dlon: -0.4 },
+        { dlat: 0.3, dlon: 0.3 },
+        { dlat: -0.3, dlon: -0.3 },
     ];
 
     offsets.forEach(function(o) {

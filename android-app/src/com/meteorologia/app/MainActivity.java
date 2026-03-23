@@ -141,13 +141,35 @@ public class MainActivity extends Activity {
     private class WebBridge {
         @JavascriptInterface
         public String httpGet(String urlStr) {
+            return doHttpGet(urlStr, 10000);
+        }
+
+        @JavascriptInterface
+        public void httpGetAsync(final String urlStr, final String callbackId) {
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final String result = doHttpGet(urlStr, 10000);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            String escaped = result.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                            webView.evaluateJavascript(
+                                "_nativeCallback('" + callbackId + "', '" + escaped + "')", null);
+                        }
+                    });
+                }
+            }).start();
+        }
+
+        private String doHttpGet(String urlStr, int timeout) {
             HttpURLConnection conn = null;
             try {
                 URL url = new URL(urlStr);
                 conn = (HttpURLConnection) url.openConnection();
                 conn.setRequestMethod("GET");
-                conn.setConnectTimeout(15000);
-                conn.setReadTimeout(15000);
+                conn.setConnectTimeout(timeout);
+                conn.setReadTimeout(timeout);
                 conn.setRequestProperty("Accept", "application/json");
 
                 int code = conn.getResponseCode();
