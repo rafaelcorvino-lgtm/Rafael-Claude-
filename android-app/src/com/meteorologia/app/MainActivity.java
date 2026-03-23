@@ -15,6 +15,8 @@ import android.webkit.ConsoleMessage;
 import android.webkit.JavascriptInterface;
 import android.graphics.Color;
 import android.os.Build;
+import android.Manifest;
+import android.content.pm.PackageManager;
 import java.io.InputStream;
 import java.io.ByteArrayInputStream;
 import java.io.BufferedReader;
@@ -27,6 +29,7 @@ import java.net.URLDecoder;
 public class MainActivity extends Activity {
     private WebView webView;
     private static final String LOCAL_HOST = "https://meteorologia.app/";
+    private static final int LOCATION_PERMISSION_REQUEST = 1001;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -38,6 +41,16 @@ public class MainActivity extends Activity {
             WindowManager.LayoutParams.FLAG_FULLSCREEN
         );
         getWindow().setStatusBarColor(Color.parseColor("#0f1923"));
+
+        // Request location permission at runtime (required for Android 6+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+                }, LOCATION_PERMISSION_REQUEST);
+            }
+        }
 
         webView = new WebView(this);
         setContentView(webView);
@@ -152,9 +165,11 @@ public class MainActivity extends Activity {
                 reader.close();
                 return sb.toString();
             } catch (Exception e) {
+                String msg = e.getMessage();
+                if (msg == null) msg = "Unknown error";
                 return "{\"_error\": true, \"_message\": \"" +
                     e.getClass().getSimpleName() + ": " +
-                    e.getMessage().replace("\"", "'") + "\"}";
+                    msg.replace("\"", "'") + "\"}";
             } finally {
                 if (conn != null) conn.disconnect();
             }
@@ -262,6 +277,18 @@ public class MainActivity extends Activity {
         if (path.endsWith(".jpg") || path.endsWith(".jpeg")) return "image/jpeg";
         if (path.endsWith(".ico")) return "image/x-icon";
         return "application/octet-stream";
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        if (requestCode == LOCATION_PERMISSION_REQUEST) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted - reload to enable geolocation
+                if (webView != null) {
+                    webView.reload();
+                }
+            }
+        }
     }
 
     @Override
