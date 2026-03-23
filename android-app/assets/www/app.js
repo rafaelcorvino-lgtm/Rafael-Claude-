@@ -572,9 +572,10 @@ document.addEventListener('click', function(e) {
     }
 });
 
-// ---- Radar de Chuva ao Vivo (RainViewer) ----
+// ---- Radar de Chuva ao Vivo (RainViewer) + Estações Meteorológicas ----
 
 var RAINVIEWER_URL = 'https://api.rainviewer.com/public/weather-maps.json';
+var OPENMETEO_URL = 'https://api.open-meteo.com/v1/forecast';
 var radarMap = null;
 var radarMarker = null;
 var radarLayers = [];
@@ -583,6 +584,7 @@ var radarPastCount = 0;
 var radarIndex = 0;
 var radarInterval = null;
 var radarPlaying = false;
+var stationMarkers = [];
 
 function initRadar(lat, lon) {
     if (typeof L === 'undefined') return;
@@ -607,7 +609,7 @@ function initRadar(lat, lon) {
         }
 
         // Add/update city marker
-        var cityName = elements.city.textContent || '';
+        var cityName = elements.cityName.textContent || '';
         var markerIcon = L.divIcon({
             className: 'radar-city-marker',
             html: '<div class="radar-marker-pin"></div><div class="radar-marker-label">' + cityName + '</div>',
@@ -632,7 +634,7 @@ function initRadar(lat, lon) {
         // Fetch radar data via NativeBridge
         nativeGet(RAINVIEWER_URL, function(err, data) {
             if (err) {
-                elements.radarTime.textContent = 'Indisponível';
+                elements.radarTime.textContent = 'Sem radar';
                 return;
             }
             try {
@@ -663,15 +665,135 @@ function initRadar(lat, lon) {
                     showRadarFrame(radarIndex);
                 }
             } catch(e) {
-                elements.radarTime.textContent = 'Indisponível';
+                elements.radarTime.textContent = 'Sem radar';
             }
         });
+
+        // Load weather stations on the map
+        loadWeatherStations(lat, lon);
 
         // Fix map rendering
         setTimeout(function() { if (radarMap) radarMap.invalidateSize(); }, 200);
     } catch(e) {
-        elements.radarTime.textContent = 'Indisponível';
+        elements.radarTime.textContent = 'Sem radar';
     }
+}
+
+// ---- Estações Meteorológicas em Tempo Real ----
+
+function loadWeatherStations(lat, lon) {
+    if (!radarMap) return;
+
+    // Remove old station markers
+    stationMarkers.forEach(function(m) { radarMap.removeLayer(m); });
+    stationMarkers = [];
+
+    // Generate station points in a grid around the location (~50km spacing)
+    var stations = [];
+    var offsets = [
+        { dlat: 0, dlon: 0 },
+        { dlat: 0.45, dlon: 0 },
+        { dlat: -0.45, dlon: 0 },
+        { dlat: 0, dlon: 0.45 },
+        { dlat: 0, dlon: -0.45 },
+        { dlat: 0.32, dlon: 0.32 },
+        { dlat: -0.32, dlon: 0.32 },
+        { dlat: 0.32, dlon: -0.32 },
+        { dlat: -0.32, dlon: -0.32 },
+        { dlat: 0.7, dlon: 0 },
+        { dlat: -0.7, dlon: 0 },
+        { dlat: 0, dlon: 0.7 },
+        { dlat: 0, dlon: -0.7 },
+    ];
+
+    offsets.forEach(function(o) {
+        stations.push({
+            lat: Math.round((lat + o.dlat) * 100) / 100,
+            lon: Math.round((lon + o.dlon) * 100) / 100
+        });
+    });
+
+    // Build Open-Meteo multi-point URL
+    var lats = stations.map(function(s) { return s.lat; }).join(',');
+    var lons = stations.map(function(s) { return s.lon; }).join(',');
+    var url = OPENMETEO_URL +
+        '?latitude=' + lats +
+        '&longitude=' + lons +
+        '&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,precipitation' +
+        '&timezone=auto';
+
+    nativeGet(url, function(err, data) {
+        if (err || !data) return;
+
+        // Open-Meteo returns array for multi-point or single object
+        var results = Array.isArray(data) ? data : [data];
+
+        results.forEach(function(point, i) {
+            if (!point.current) return;
+            var c = point.current;
+            var sLat = stations[i] ? stations[i].lat : point.latitude;
+            var sLon = stations[i] ? stations[i].lon : point.longitude;
+            var temp = Math.round(c.temperature_2m);
+            var humidity = c.relative_humidity_2m;
+            var wind = Math.round(c.wind_speed_10m);
+            var precip = c.precipitation || 0;
+            var code = c.weather_code || 0;
+            var wInfo = getWmoWeather(code);
+
+            // Skip the center point (main city marker already there)
+            if (i === 0) {
+                // Update center marker with weather data
+                if (radarMarker) {
+                    var centerName = elements.cityName.textContent || '';
+                    radarMarker.bindPopup(
+                        '<div class="station-popup">' +
+                        '<strong>' + centerName + '</strong><br>' +
+                        '<span class="station-temp">' + temp + '°C</span> ' + wInfo.icon + '<br>' +
+                        'Umidade: ' + humidity + '%<br>' +
+                        'Vento: ' + wind + ' km/h<br>' +
+                        'Precip: ' + precip + ' mm' +
+                        '</div>'
+                    );
+                }
+                return;
+            }
+
+            var stationIcon = L.divIcon({
+                className: 'weather-station-marker',
+                html: '<div class="station-dot" style="background:' + getTempColor(temp) + '"></div>' +
+                      '<div class="station-label">' + temp + '°</div>',
+                iconSize: [50, 30],
+                iconAnchor: [25, 15]
+            });
+
+            var marker = L.marker([sLat, sLon], { icon: stationIcon, zIndexOffset: 500 }).addTo(radarMap);
+            marker.bindPopup(
+                '<div class="station-popup">' +
+                '<span class="station-temp">' + temp + '°C</span> ' + wInfo.icon + ' ' + wInfo.desc + '<br>' +
+                'Umidade: ' + humidity + '%<br>' +
+                'Vento: ' + wind + ' km/h<br>' +
+                'Precipitação: ' + precip + ' mm' +
+                '</div>'
+            );
+            stationMarkers.push(marker);
+        });
+    });
+}
+
+function getWmoWeather(code) {
+    if (wmoWeatherCodes[code]) return wmoWeatherCodes[code];
+    return { desc: 'Variável', icon: '🌤️' };
+}
+
+function getTempColor(temp) {
+    if (temp <= 0) return '#00bfff';
+    if (temp <= 10) return '#4da6ff';
+    if (temp <= 15) return '#80ccff';
+    if (temp <= 20) return '#66cc66';
+    if (temp <= 25) return '#ffcc00';
+    if (temp <= 30) return '#ff8c00';
+    if (temp <= 35) return '#ff4500';
+    return '#cc0000';
 }
 
 function buildRadarTimestamps() {
