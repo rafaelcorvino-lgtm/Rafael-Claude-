@@ -35,12 +35,18 @@ public class MainActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        getWindow().setFlags(
-            WindowManager.LayoutParams.FLAG_FULLSCREEN,
-            WindowManager.LayoutParams.FLAG_FULLSCREEN
-        );
-        getWindow().setStatusBarColor(Color.parseColor("#0f1923"));
+        try {
+            requestWindowFeature(Window.FEATURE_NO_TITLE);
+        } catch (Exception e) { /* some devices don't support this */ }
+        try {
+            getWindow().setFlags(
+                WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN
+            );
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                getWindow().setStatusBarColor(Color.parseColor("#0f1923"));
+            }
+        } catch (Exception e) { /* ignore */ }
 
         // Request location permission at runtime (required for Android 6+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
@@ -153,9 +159,14 @@ public class MainActivity extends Activity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            String escaped = result.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
-                            webView.evaluateJavascript(
-                                "_nativeCallback('" + callbackId + "', '" + escaped + "')", null);
+                            try {
+                                if (webView == null) return;
+                                String escaped = result.replace("\\", "\\\\").replace("'", "\\'").replace("\n", "\\n").replace("\r", "");
+                                webView.evaluateJavascript(
+                                    "_nativeCallback('" + callbackId + "', '" + escaped + "')", null);
+                            } catch (Exception e) {
+                                android.util.Log.e("Meteorologia", "Callback error: " + e.getMessage());
+                            }
                         }
                     });
                 }
@@ -246,9 +257,11 @@ public class MainActivity extends Activity {
         } catch (Exception e) {
             android.util.Log.e("Meteorologia", "API Proxy error: " + e.getMessage());
             try {
+                String emsg = e.getMessage();
+                if (emsg == null) emsg = "Unknown error";
                 String errorJson = "{\"_error\":true,\"_message\":\"" +
                     e.getClass().getSimpleName() + ": " +
-                    e.getMessage().replace("\"", "'") + "\"}";
+                    emsg.replace("\"", "'") + "\"}";
                 byte[] bytes = errorJson.getBytes("UTF-8");
                 java.util.Map<String, String> headers = new java.util.HashMap<>();
                 headers.put("Access-Control-Allow-Origin", "*");
@@ -278,10 +291,16 @@ public class MainActivity extends Activity {
             if (path.isEmpty() || path.equals("/")) {
                 path = "index.html";
             }
+            if (path.startsWith("api/")) {
+                return null;
+            }
             try {
                 InputStream is = getAssets().open("www/" + path);
                 String mimeType = getMimeType(path);
-                return new WebResourceResponse(mimeType, "UTF-8", is);
+                java.util.Map<String, String> headers = new java.util.HashMap<>();
+                headers.put("Access-Control-Allow-Origin", "*");
+                headers.put("Cache-Control", "no-cache");
+                return new WebResourceResponse(mimeType, "UTF-8", 200, "OK", headers, is);
             } catch (IOException e) {
                 return null;
             }
