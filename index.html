@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Meteo Corvino</title>
+    <meta name="description" content="Meteo Corvino - Previsão do tempo para aviação agrícola">
+    <meta name="theme-color" content="#0f1923">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Meteo Corvino">
+    <link rel="manifest" href="manifest.json">
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+    <link rel="apple-touch-icon" href="icons/icon-192.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="leaflet.css">
+</head>
+<body>
+    <div class="app">
+        <header>
+            <h1>Meteo Corvino</h1>
+            <div class="search-box">
+                <input type="text" id="city-input" placeholder="Digite o nome da cidade..." autocomplete="off">
+                <button id="search-btn" title="Buscar">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                    </svg>
+                </button>
+                <button id="location-btn" title="Usar minha localização">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>
+                    </svg>
+                </button>
+            </div>
+            <ul id="suggestions" class="suggestions hidden"></ul>
+        </header>
+
+        <div id="loading" class="loading hidden">
+            <div class="spinner"></div>
+            <p>Carregando...</p>
+        </div>
+
+        <div id="error" class="error hidden"></div>
+
+        <!-- Tela inicial com aviação agrícola -->
+        <section id="welcome-screen" class="welcome-screen">
+            <div class="welcome-hero">
+                <svg class="hero-plane" viewBox="0 0 400 280" xmlns="http://www.w3.org/2000/svg">
+                    <defs>
+                        <linearGradient id="skyGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#4a90c4"/>
+                            <stop offset="40%" stop-color="#6db3e8"/>
+                            <stop offset="100%" stop-color="#a8d8f0"/>
+                        </linearGradient>
+                        <linearGradient id="fieldGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#3d8b37"/>
+                            <stop offset="100%" stop-color="#2d6b28"/>
+                        </linearGradient>
+                        <linearGradient id="sprayGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#e8dfa0" stop-opacity="0.8"/>
+                            <stop offset="40%" stop-color="#d4c878" stop-opacity="0.5"/>
+                            <stop offset="100%" stop-color="#c8b850" stop-opacity="0"/>
+                        </linearGradient>
+                        <radialGradient id="sprayCloud" cx="50%" cy="30%" r="60%">
+                            <stop offset="0%" stop-color="#e8dfa0" stop-opacity="0.6"/>
+                            <stop offset="100%" stop-color="#d4c878" stop-opacity="0"/>
+                        </radialGradient>
+                        <linearGradient id="hillGrad" x1="0" y1="0" x2="0" y2="1">
+                            <stop offset="0%" stop-color="#5aad52"/>
+                            <stop offset="100%" stop-color="#3d8b37"/>
+                        </linearGradient>
+                    </defs>
+                    <!-- Céu -->
+                    <rect width="400" height="280" fill="url(#skyGrad)" rx="12"/>
+                    <!-- Nuvens realistas -->
+                    <g opacity="0.85">
+                        <ellipse cx="60" cy="30" rx="45" ry="16" fill="white" opacity="0.9"/>
+                        <ellipse cx="90" cy="25" rx="35" ry="14" fill="white" opacity="0.85"/>
+                        <ellipse cx="40" cy="28" rx="30" ry="12" fill="white" opacity="0.8"/>
+                    </g>
+                    <g opacity="0.7">
+                        <ellipse cx="300" cy="45" rx="55" ry="18" fill="white" opacity="0.8"/>
+                        <ellipse cx="340" cy="40" rx="40" ry="15" fill="white" opacity="0.75"/>
+                        <ellipse cx="270" cy="42" rx="35" ry="13" fill="white" opacity="0.7"/>
+                    </g>
+                    <g opacity="0.5">
+                        <ellipse cx="180" cy="20" rx="30" ry="10" fill="white" opacity="0.6"/>
+                        <ellipse cx="200" cy="18" rx="25" ry="9" fill="white" opacity="0.5"/>
+                    </g>
+                    <!-- Colinas verdes distantes -->
+                    <path d="M0 165 Q60 140 120 150 Q180 130 250 145 Q320 125 400 140 L400 180 L0 180Z" fill="#5aad52" opacity="0.6"/>
+                    <path d="M0 170 Q100 148 200 158 Q300 140 400 155 L400 190 L0 190Z" fill="#4a9d45" opacity="0.7"/>
+                    <!-- Campo principal de soja -->
+                    <path d="M0 180 Q50 168 100 175 Q150 165 200 172 Q250 162 300 170 Q350 160 400 168 L400 280 L0 280Z" fill="url(#fieldGrad)"/>
+                    <!-- Textura da plantação - linhas de soja -->
+                    <g stroke="#2d7a28" stroke-width="0.6" opacity="0.35">
+                        <path d="M0 185 Q100 173 200 180 Q300 170 400 175" fill="none"/>
+                        <path d="M0 192 Q100 180 200 187 Q300 177 400 182" fill="none"/>
+                        <path d="M0 199 Q100 187 200 194 Q300 184 400 189" fill="none"/>
+                        <path d="M0 206 Q100 194 200 201 Q300 191 400 196" fill="none"/>
+                        <path d="M0 213 Q100 201 200 208 Q300 198 400 203" fill="none"/>
+                        <path d="M0 220 Q100 208 200 215 Q300 205 400 210" fill="none"/>
+                        <path d="M0 227 Q100 215 200 222 Q300 212 400 217" fill="none"/>
+                        <path d="M0 234 Q100 222 200 229 Q300 219 400 224" fill="none"/>
+                        <path d="M0 241 Q100 229 200 236 Q300 226 400 231" fill="none"/>
+                        <path d="M0 248 Q100 236 200 243 Q300 233 400 238" fill="none"/>
+                        <path d="M0 255 Q100 243 200 250 Q300 240 400 245" fill="none"/>
+                        <path d="M0 262 Q100 250 200 257 Q300 247 400 252" fill="none"/>
+                        <path d="M0 269 Q100 257 200 264 Q300 254 400 259" fill="none"/>
+                    </g>
+                    <!-- Folhagem detalhada da soja -->
+                    <g fill="#48a040" opacity="0.3">
+                        <circle cx="30" cy="200" r="3"/><circle cx="60" cy="195" r="2.5"/>
+                        <circle cx="90" cy="202" r="3"/><circle cx="120" cy="198" r="2.5"/>
+                        <circle cx="150" cy="205" r="3"/><circle cx="180" cy="195" r="2.5"/>
+                        <circle cx="210" cy="200" r="3"/><circle cx="240" cy="192" r="2.5"/>
+                        <circle cx="270" cy="198" r="3"/><circle cx="300" cy="195" r="2.5"/>
+                        <circle cx="330" cy="202" r="3"/><circle cx="360" cy="197" r="2.5"/>
+                        <circle cx="45" cy="215" r="3.5"/><circle cx="75" cy="210" r="3"/>
+                        <circle cx="105" cy="218" r="3.5"/><circle cx="135" cy="212" r="3"/>
+                        <circle cx="165" cy="220" r="3.5"/><circle cx="195" cy="210" r="3"/>
+                        <circle cx="225" cy="215" r="3.5"/><circle cx="255" cy="208" r="3"/>
+                        <circle cx="285" cy="213" r="3.5"/><circle cx="315" cy="210" r="3"/>
+                        <circle cx="345" cy="217" r="3.5"/><circle cx="375" cy="212" r="3"/>
+                    </g>
+                    <!-- Nuvem de spray/pulverização -->
+                    <g>
+                        <ellipse cx="200" cy="185" rx="110" ry="25" fill="url(#sprayCloud)" opacity="0.7"/>
+                        <ellipse cx="200" cy="178" rx="90" ry="18" fill="#e8dfa0" opacity="0.35"/>
+                        <ellipse cx="185" cy="190" rx="100" ry="22" fill="#d4c878" opacity="0.2"/>
+                    </g>
+                    <!-- Avião agrícola - vista frontal/ligeiramente angular -->
+                    <g transform="translate(200, 110)">
+                        <!-- Sombra do avião -->
+                        <ellipse cx="0" cy="75" rx="40" ry="5" fill="rgba(0,0,0,0.15)"/>
+                        <!-- Asa esquerda -->
+                        <polygon points="-120,-2 -15,-4 -15,2 -120,4" fill="#e8e8e8"/>
+                        <polygon points="-120,-2 -120,4 -130,1" fill="#d32f2f"/>
+                        <!-- Asa direita -->
+                        <polygon points="120,-2 15,-4 15,2 120,4" fill="#e0e0e0"/>
+                        <polygon points="120,-2 120,4 130,1" fill="#d32f2f"/>
+                        <!-- Barra de pulverização esquerda -->
+                        <rect x="-115" y="4" width="100" height="1.5" rx="0.75" fill="#999"/>
+                        <!-- Barra de pulverização direita -->
+                        <rect x="15" y="4" width="100" height="1.5" rx="0.75" fill="#999"/>
+                        <!-- Jatos de spray esquerda -->
+                        <g opacity="0.5">
+                            <line x1="-100" y1="6" x2="-105" y2="70" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="-80" y1="6" x2="-84" y2="72" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="-60" y1="6" x2="-63" y2="74" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="-40" y1="6" x2="-42" y2="72" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="-20" y1="6" x2="-21" y2="70" stroke="url(#sprayGrad)" stroke-width="3"/>
+                        </g>
+                        <!-- Jatos de spray direita -->
+                        <g opacity="0.5">
+                            <line x1="20" y1="6" x2="21" y2="70" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="40" y1="6" x2="42" y2="72" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="60" y1="6" x2="63" y2="74" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="80" y1="6" x2="84" y2="72" stroke="url(#sprayGrad)" stroke-width="3"/>
+                            <line x1="100" y1="6" x2="105" y2="70" stroke="url(#sprayGrad)" stroke-width="3"/>
+                        </g>
+                        <!-- Fuselagem -->
+                        <ellipse cx="0" cy="0" rx="16" ry="12" fill="#e8e8e8"/>
+                        <ellipse cx="0" cy="-2" rx="14" ry="10" fill="#f0f0f0"/>
+                        <!-- Motor/spinner -->
+                        <ellipse cx="0" cy="-8" rx="6" ry="5" fill="#ccc"/>
+                        <circle cx="0" cy="-10" r="3" fill="#999"/>
+                        <!-- Hélice (blur para simular rotação) -->
+                        <ellipse cx="0" cy="-12" rx="22" ry="2" fill="#bbb" opacity="0.4"/>
+                        <!-- Cabine/cockpit -->
+                        <path d="M-7,-6 Q-8,-14 0,-16 Q8,-14 7,-6Z" fill="#87CEEB" opacity="0.6"/>
+                        <!-- Piloto (silhueta) -->
+                        <circle cx="0" cy="-8" r="3" fill="#555" opacity="0.4"/>
+                        <!-- Trem de pouso -->
+                        <line x1="-8" y1="10" x2="-10" y2="22" stroke="#888" stroke-width="2"/>
+                        <line x1="8" y1="10" x2="10" y2="22" stroke="#888" stroke-width="2"/>
+                        <circle cx="-11" cy="23" r="2.5" fill="#555"/>
+                        <circle cx="11" cy="23" r="2.5" fill="#555"/>
+                        <!-- Cauda -->
+                        <path d="M-3,10 L0,30 L3,10" fill="#e0e0e0"/>
+                        <path d="M-1,28 L0,32 L1,28" fill="#d32f2f"/>
+                        <!-- Estabilizador vertical -->
+                        <path d="M0,22 L-2,30 L0,35 L2,30Z" fill="#e8e8e8"/>
+                    </g>
+                </svg>
+            </div>
+            <div class="welcome-text">
+                <p class="welcome-subtitle">Previsão meteorológica para aviação agrícola</p>
+                <p class="welcome-hint">Busque uma cidade ou use sua localização para começar</p>
+            </div>
+            <div class="welcome-features">
+                <div class="feature-item">
+                    <span class="feature-icon">🌡️</span>
+                    <span>Temperatura e umidade</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">💨</span>
+                    <span>Vento e visibilidade</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">🌧️</span>
+                    <span>Radar de chuva ao vivo</span>
+                </div>
+                <div class="feature-item">
+                    <span class="feature-icon">📅</span>
+                    <span>Previsão de 7 dias</span>
+                </div>
+            </div>
+        </section>
+
+        <main id="weather-content" class="hidden">
+            <section class="current-weather">
+                <div class="location-info">
+                    <h2 id="city-name"></h2>
+                    <p id="current-date"></p>
+                </div>
+                <div class="current-main">
+                    <div class="temp-icon">
+                        <span id="weather-icon" class="weather-icon"></span>
+                        <span id="current-temp" class="current-temp"></span>
+                    </div>
+                    <p id="weather-desc" class="weather-desc"></p>
+                </div>
+                <div class="current-details">
+                    <div class="detail">
+                        <span class="detail-label">Sensação</span>
+                        <span id="feels-like" class="detail-value"></span>
+                    </div>
+                    <div class="detail">
+                        <span class="detail-label">Umidade</span>
+                        <span id="humidity" class="detail-value"></span>
+                    </div>
+                    <div class="detail">
+                        <span class="detail-label">Vento</span>
+                        <span id="wind" class="detail-value"></span>
+                    </div>
+                    <div class="detail">
+                        <span class="detail-label">Precipitação</span>
+                        <span id="precipitation" class="detail-value"></span>
+                    </div>
+                    <div class="detail">
+                        <span class="detail-label">UV</span>
+                        <span id="uv-index" class="detail-value"></span>
+                    </div>
+                    <div class="detail">
+                        <span class="detail-label">Visibilidade</span>
+                        <span id="visibility" class="detail-value"></span>
+                    </div>
+                </div>
+            </section>
+
+            <section class="radar-section">
+                <h3>Radar de Chuva ao Vivo</h3>
+                <div id="radar-map" class="radar-map"></div>
+                <div class="radar-timeline">
+                    <button id="radar-play" class="radar-play-btn" title="Play/Pause">▶</button>
+                    <div class="radar-slider-wrap">
+                        <input type="range" id="radar-slider" class="radar-slider" min="0" max="0" value="0" step="1">
+                        <div class="radar-timestamps" id="radar-timestamps"></div>
+                    </div>
+                    <span id="radar-time" class="radar-time">--:--</span>
+                </div>
+                <div class="radar-legend">
+                    <span class="legend-label">Leve</span>
+                    <div class="legend-bar"></div>
+                    <span class="legend-label">Forte</span>
+                </div>
+            </section>
+
+            <section class="hourly-forecast">
+                <h3>Próximas Horas</h3>
+                <div id="hourly-container" class="hourly-container"></div>
+            </section>
+
+            <section class="daily-forecast">
+                <h3>Próximos Dias</h3>
+                <div id="daily-container" class="daily-container"></div>
+            </section>
+        </main>
+    </div>
+
+    <script src="leaflet.js"></script>
+    <script src="app.js"></script>
+    <script>
+        // Service Worker disabled in APK (file:// protocol)
+    </script>
+</body>
+</html>
