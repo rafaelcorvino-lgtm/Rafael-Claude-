@@ -151,6 +151,72 @@ def ttube(ro, ri, length, seg, start, direction):
     return faces
 
 
+def partial_ttube(ro, ri, length, seg, start, direction, open_angle_start, open_angle_end):
+    """
+    Tilted hollow tube with a SIDE OPENING.
+    open_angle_start/end define the angular range (in radians) to SKIP.
+    The opening is relative to the perp1 axis (first perpendicular to direction).
+    """
+    faces = []
+    d = np.array(direction, dtype=float); d /= np.linalg.norm(d)
+    up = np.array([0,0,1.0]) if abs(d[2]) < 0.9 else np.array([1,0,0.0])
+    p1 = np.cross(d, up); p1 /= np.linalg.norm(p1)
+    p2 = np.cross(d, p1); p2 /= np.linalg.norm(p2)
+    s = np.array(start, dtype=float); e = s + d * length
+
+    def in_opening(angle):
+        """Check if angle falls within the opening arc."""
+        a = angle % (2 * math.pi)
+        os = open_angle_start % (2 * math.pi)
+        oe = open_angle_end % (2 * math.pi)
+        if os < oe:
+            return os <= a <= oe
+        else:  # wraps around 0
+            return a >= os or a <= oe
+
+    edge_start_verts = []  # vertices at opening edges for wall caps
+    edge_end_verts = []
+
+    for i in range(seg):
+        a1 = 2*math.pi*i/seg
+        a2 = 2*math.pi*(i+1)/seg
+
+        # Skip faces in the opening
+        if in_opening(a1) and in_opening(a2):
+            continue
+
+        oo1 = ro*(math.cos(a1)*p1+math.sin(a1)*p2)
+        oo2 = ro*(math.cos(a2)*p1+math.sin(a2)*p2)
+        io1 = ri*(math.cos(a1)*p1+math.sin(a1)*p2)
+        io2 = ri*(math.cos(a2)*p1+math.sin(a2)*p2)
+        ob1=(s+oo1).tolist(); ob2=(s+oo2).tolist()
+        ot1=(e+oo1).tolist(); ot2=(e+oo2).tolist()
+        ib1=(s+io1).tolist(); ib2=(s+io2).tolist()
+        it1=(e+io1).tolist(); it2=(e+io2).tolist()
+        # outer
+        faces.append([ob1,ot1,ob2]); faces.append([ob2,ot1,ot2])
+        # inner
+        faces.append([ib1,ib2,it1]); faces.append([ib2,it2,it1])
+        # bottom ring
+        faces.append([ob1,ob2,ib1]); faces.append([ib1,ob2,ib2])
+        # top ring
+        faces.append([ot1,it1,ot2]); faces.append([it2,ot2,it1])
+
+    # Create WALL CAPS at the edges of the opening
+    # (seal the cut edges so it's a proper solid for printing)
+    for edge_angle in [open_angle_start, open_angle_end]:
+        a = edge_angle
+        oo = ro*(math.cos(a)*p1+math.sin(a)*p2)
+        io = ri*(math.cos(a)*p1+math.sin(a)*p2)
+        ob = (s+oo).tolist(); ot = (e+oo).tolist()
+        ib = (s+io).tolist(); it_ = (e+io).tolist()
+        # Wall face (rectangle from inner to outer, bottom to top)
+        faces.append([ob, ot, ib])
+        faces.append([ib, ot, it_])
+
+    return faces
+
+
 def tcone(rb, rt, length, seg, start, direction):
     """Tilted cone/frustum along a direction."""
     faces = []
@@ -248,17 +314,26 @@ def generate():
                        brace_start.tolist(), brace_dir.tolist()))
 
     # =============================================
-    # BARREL — narrow, tilted, hollow (like photo)
+    # BARREL — narrow, tilted, hollow, WITH SIDE OPENING
+    # =============================================
+    # The side opening allows removing the bottle after it
+    # falls and the cap is removed. Opening is on the LEFT
+    # side of the barrel (perpendicular to tilt plane).
+    #
+    # Opening spans ~120 degrees on one side, from the
+    # hub area up to about 70% of the barrel length.
     # =============================================
 
     # Barrel starts at hub, goes up and slightly forward
     barrel_start = hub_pos + bdir * (-5)  # Slightly below hub
 
-    # Main barrel tube
-    F.extend(ttube(barrel_or, barrel_ir, barrel_len, seg,
-                   barrel_start.tolist(), bdir.tolist()))
+    # Calculate opening angles
+    # The opening is on the X+ side (left when viewed from front)
+    # In the barrel's local coordinate system, perp1 = X direction
+    open_start = math.radians(-60)   # Opening from -60 to +60 degrees
+    open_end = math.radians(60)      # = 120 degree opening
 
-    # Barrel below hub (short extension downward)
+    # LOWER BARREL (below hub) — fully closed (no opening)
     barrel_bottom = barrel_start - bdir * 20
     F.extend(ttube(barrel_or, barrel_ir, 20, seg,
                    barrel_bottom.tolist(), bdir.tolist()))
@@ -266,10 +341,80 @@ def generate():
     # Bottom cap (closes the bottom of the barrel)
     F.extend(tcyl(barrel_ir, 3, seg, barrel_bottom.tolist(), bdir.tolist()))
 
+    # MAIN BARREL — with side opening for bottle removal
+    # Split into: bottom closed section + open section + top closed section
+    closed_bottom_len = 15   # Closed section at bottom (structural)
+    open_section_len = 95    # Open section (where bottle is accessed)
+    closed_top_len = barrel_len - closed_bottom_len - open_section_len  # Top closed
+
+    # Section 1: Bottom closed (full tube)
+    sec1_start = barrel_start
+    F.extend(ttube(barrel_or, barrel_ir, closed_bottom_len, seg,
+                   sec1_start.tolist(), bdir.tolist()))
+
+    # Section 2: OPEN section (partial tube with cutout)
+    sec2_start = barrel_start + bdir * closed_bottom_len
+    F.extend(partial_ttube(barrel_or, barrel_ir, open_section_len, seg,
+                           sec2_start.tolist(), bdir.tolist(),
+                           open_start, open_end))
+
+    # Section 3: Top closed (full tube)
+    sec3_start = barrel_start + bdir * (closed_bottom_len + open_section_len)
+    F.extend(ttube(barrel_or, barrel_ir, closed_top_len, seg,
+                   sec3_start.tolist(), bdir.tolist()))
+
+    # =============================================
+    # OPENING FRAME — reinforcement around the cutout
+    # =============================================
+    # Adds structural ribs around the opening edges for
+    # strength and a clean look.
+
+    # Calculate perpendicular vectors for positioning the frame
+    barrel_up = np.array([0, math.sin(tilt_rad), math.cos(tilt_rad)])
+    barrel_up /= np.linalg.norm(barrel_up)
+    barrel_side = np.cross(bdir, barrel_up)
+    barrel_side /= np.linalg.norm(barrel_side)
+
+    # Frame bars along the two vertical edges of the opening
+    frame_r = 2.5
+    for angle in [open_start, open_end]:
+        # Position on barrel surface at this angle
+        # Using the barrel's local perp vectors
+        d_norm = bdir / np.linalg.norm(bdir)
+        up_ref = np.array([0,0,1.0]) if abs(d_norm[2]) < 0.9 else np.array([1,0,0.0])
+        lp1 = np.cross(d_norm, up_ref); lp1 /= np.linalg.norm(lp1)
+        lp2 = np.cross(d_norm, lp1); lp2 /= np.linalg.norm(lp2)
+        offset = (barrel_or + 1) * (math.cos(angle) * lp1 + math.sin(angle) * lp2)
+
+        frame_start = sec2_start + offset
+        F.extend(tcyl(frame_r, open_section_len, seg//4,
+                       frame_start.tolist(), bdir.tolist()))
+
+    # Frame bar along the bottom edge of the opening (horizontal)
+    d_norm = bdir / np.linalg.norm(bdir)
+    up_ref = np.array([0,0,1.0]) if abs(d_norm[2]) < 0.9 else np.array([1,0,0.0])
+    lp1 = np.cross(d_norm, up_ref); lp1 /= np.linalg.norm(lp1)
+    lp2 = np.cross(d_norm, lp1); lp2 /= np.linalg.norm(lp2)
+
+    edge1_offset = (barrel_or + 1) * (math.cos(open_start) * lp1 + math.sin(open_start) * lp2)
+    edge2_offset = (barrel_or + 1) * (math.cos(open_end) * lp1 + math.sin(open_end) * lp2)
+
+    # Bottom horizontal frame bar
+    bar_start = sec2_start + edge1_offset
+    bar_dir = edge2_offset - edge1_offset
+    F.extend(tcyl(frame_r, np.linalg.norm(bar_dir), seg//4,
+                  bar_start.tolist(), bar_dir.tolist()))
+
+    # Top horizontal frame bar
+    bar_start_top = sec2_start + bdir * open_section_len + edge1_offset
+    F.extend(tcyl(frame_r, np.linalg.norm(bar_dir), seg//4,
+                  bar_start_top.tolist(), bar_dir.tolist()))
+
     barrel_end = barrel_start + bdir * barrel_len
 
     # =============================================
     # MUZZLE FLARE (top of barrel — like photo)
+    # (muzzle is fully closed - only the middle section has the opening)
     # =============================================
     F.extend(tcone(barrel_or, barrel_or + 5, 8, seg,
                    barrel_end.tolist(), bdir.tolist()))
