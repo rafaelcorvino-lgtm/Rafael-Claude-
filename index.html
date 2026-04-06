@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroFlight - Diário de Bordo do Piloto Agrícola</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-plane"></i>
+            <h2>AgroFlight</h2>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" data-page="dashboard">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Painel</span>
+            </li>
+            <li class="nav-item" data-page="logbook">
+                <i class="fas fa-book"></i>
+                <span>Diário de Bordo</span>
+            </li>
+            <li class="nav-item" data-page="limits">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Limites Legais</span>
+            </li>
+            <li class="nav-item" data-page="settings">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <p>Lei 13.475/2017</p>
+            <p>RBAC 137 | RBAC 117</p>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="top-bar-info">
+                <span id="currentDate"></span>
+                <span class="separator">|</span>
+                <span id="pilotName">Piloto</span>
+            </div>
+            <div class="top-bar-alert" id="topBarAlert" style="display:none;">
+                <i class="fas fa-bell"></i>
+                <span id="alertCount">0</span>
+            </div>
+        </header>
+
+        <!-- Dashboard Page -->
+        <section class="page active" id="page-dashboard">
+            <h1 class="page-title">Painel de Controle</h1>
+
+            <!-- Alert Banner -->
+            <div class="alert-banner" id="alertBanner" style="display:none;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="alertMessage"></span>
+            </div>
+
+            <!-- Summary Cards -->
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon blue"><i class="fas fa-clock"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Hoje</h3>
+                        <p class="card-value" id="hoursToday">0:00</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill blue" id="progressToday" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitToday">9h30</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon green"><i class="fas fa-calendar-week"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Semana</h3>
+                        <p class="card-value" id="hoursWeek">0:00</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill green" id="progressWeek" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitWeek">44h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Mês</h3>
+                        <p class="card-value" id="hoursMonth">0:00</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill orange" id="progressMonth" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitMonth">100h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon red"><i class="fas fa-calendar"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Ano</h3>
+                        <p class="card-value" id="hoursYear">0:00</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill red" id="progressYear" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitYear">1.000h</span></small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Secondary Cards -->
+            <div class="cards-grid cards-secondary">
+                <div class="card">
+                    <div class="card-icon purple"><i class="fas fa-briefcase"></i></div>
+                    <div class="card-info">
+                        <h3>Jornada Hoje</h3>
+                        <p class="card-value" id="dutyToday">0:00</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill purple" id="progressDuty" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitDuty">11h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon teal"><i class="fas fa-bed"></i></div>
+                    <div class="card-info">
+                        <h3>Descanso Mínimo</h3>
+                        <p class="card-value" id="restStatus">OK</p>
+                        <small>Mínimo: <span id="limitRest">12h</span> entre jornadas</small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon cyan"><i class="fas fa-plane-arrival"></i></div>
+                    <div class="card-info">
+                        <h3>Pousos Hoje</h3>
+                        <p class="card-value" id="landingsToday">0</p>
+                        <div class="progress-bar">
+                            <div class="progress-fill cyan" id="progressLandings" style="width:0%"></div>
+                        </div>
+                        <small>Limite: <span id="limitLandings">5</span> por jornada</small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon amber"><i class="fas fa-umbrella-beach"></i></div>
+                    <div class="card-info">
+                        <h3>Folgas no Mês</h3>
+                        <p class="card-value" id="daysOff">0</p>
+                        <small>Mínimo: <span id="limitDaysOff">8</span> folgas/mês</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Flights -->
+            <div class="section-card">
+                <h2><i class="fas fa-history"></i> Últimos Voos</h2>
+                <div class="table-container">
+                    <table id="recentFlightsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Aeronave</th>
+                                <th>Origem</th>
+                                <th>Destino</th>
+                                <th>Decolagem</th>
+                                <th>Pouso</th>
+                                <th>Tempo Voo</th>
+                                <th>Operação</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentFlightsBody">
+                            <tr class="empty-row">
+                                <td colspan="8">Nenhum voo registrado</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Logbook Page -->
+        <section class="page" id="page-logbook">
+            <h1 class="page-title">Diário de Bordo</h1>
+
+            <!-- New Flight Entry Form -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-plus-circle"></i> Novo Registro de Voo</h2>
+                <form id="flightForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="flightDate">Data</label>
+                            <input type="date" id="flightDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="aircraft">Aeronave (Prefixo)</label>
+                            <input type="text" id="aircraft" placeholder="PT-XXX" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="aircraftModel">Modelo</label>
+                            <input type="text" id="aircraftModel" placeholder="Ex: Ipanema EMB-202A">
+                        </div>
+                        <div class="form-group">
+                            <label for="aircraftType">Tipo de Aeronave</label>
+                            <select id="aircraftType">
+                                <option value="convencional">Convencional</option>
+                                <option value="turbohelice">Turbo-hélice</option>
+                                <option value="jato">Jato</option>
+                                <option value="helicoptero">Helicóptero</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="origin">Local de Origem</label>
+                            <input type="text" id="origin" placeholder="Fazenda / Pista" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="destination">Local de Destino</label>
+                            <input type="text" id="destination" placeholder="Fazenda / Pista" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="takeoffTime">Hora Decolagem</label>
+                            <input type="time" id="takeoffTime" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="landingTime">Hora Pouso</label>
+                            <input type="time" id="landingTime" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dutyStart">Início Jornada</label>
+                            <input type="time" id="dutyStart" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dutyEnd">Fim Jornada</label>
+                            <input type="time" id="dutyEnd" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="landings">Nº de Pousos</label>
+                            <input type="number" id="landings" min="1" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="operation">Tipo de Operação</label>
+                            <select id="operation">
+                                <option value="pulverizacao">Pulverização</option>
+                                <option value="adubacao">Adubação</option>
+                                <option value="semeadura">Semeadura</option>
+                                <option value="dessecacao">Dessecação</option>
+                                <option value="combate_incendio">Combate a Incêndio</option>
+                                <option value="translado">Translado</option>
+                                <option value="outro">Outro</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="product">Produto Aplicado</label>
+                            <input type="text" id="product" placeholder="Nome do produto">
+                        </div>
+                        <div class="form-group">
+                            <label for="area">Área Aplicada (ha)</label>
+                            <input type="number" id="area" step="0.1" min="0" placeholder="Hectares">
+                        </div>
+                        <div class="form-group">
+                            <label for="isDayOff">Folga?</label>
+                            <select id="isDayOff">
+                                <option value="no">Não - Dia de trabalho</option>
+                                <option value="yes">Sim - Dia de folga</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="observations">Observações</label>
+                            <textarea id="observations" rows="2" placeholder="Condições meteorológicas, intercorrências..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Registrar Voo
+                        </button>
+                        <button type="reset" class="btn btn-secondary">
+                            <i class="fas fa-eraser"></i> Limpar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Day Off Registration -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-umbrella-beach"></i> Registrar Folga</h2>
+                <form id="dayOffForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="dayOffDate">Data da Folga</label>
+                            <input type="date" id="dayOffDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dayOffType">Tipo</label>
+                            <select id="dayOffType">
+                                <option value="folga">Folga Regular</option>
+                                <option value="folga_fds">Folga Fim de Semana</option>
+                                <option value="feriado">Feriado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Registrar Folga
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- All Flights Table -->
+            <div class="section-card">
+                <h2><i class="fas fa-list"></i> Todos os Registros</h2>
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label for="filterMonth">Mês</label>
+                        <input type="month" id="filterMonth">
+                    </div>
+                    <button class="btn btn-secondary" id="exportBtn">
+                        <i class="fas fa-file-export"></i> Exportar CSV
+                    </button>
+                </div>
+                <div class="table-container">
+                    <table id="allFlightsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Aeronave</th>
+                                <th>Origem</th>
+                                <th>Destino</th>
+                                <th>Decolagem</th>
+                                <th>Pouso</th>
+                                <th>Tempo Voo</th>
+                                <th>Pousos</th>
+                                <th>Operação</th>
+                                <th>Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allFlightsBody">
+                            <tr class="empty-row">
+                                <td colspan="10">Nenhum voo registrado</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Limits Page -->
+        <section class="page" id="page-limits">
+            <h1 class="page-title">Limites Legais - Monitoramento</h1>
+
+            <div class="section-card">
+                <h2><i class="fas fa-gavel"></i> Base Legal</h2>
+                <div class="legal-info">
+                    <div class="legal-item">
+                        <h3>Lei 13.475/2017 (Lei do Aeronauta)</h3>
+                        <p>Define limites de horas de voo, jornada de trabalho, repouso e folgas para tripulantes.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>RBAC 137 (ANAC)</h3>
+                        <p>Regulamenta operações aeroagrícolas. Exige registro detalhado de horas no diário de bordo.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>RBAC 117 (ANAC)</h3>
+                        <p>Gerenciamento do risco de fadiga humana. Estabelece parâmetros de segurança.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>Art. 302, Lei 7.565/1986 (CBA)</h3>
+                        <p>Exceder limites de horas de voo é infração administrativa punível com multa.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-chart-bar"></i> Status dos Limites</h2>
+                <div class="limits-grid" id="limitsGrid">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-bell"></i> Histórico de Alertas</h2>
+                <div class="alerts-list" id="alertsList">
+                    <p class="empty-message">Nenhum alerta registrado</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings Page -->
+        <section class="page" id="page-settings">
+            <h1 class="page-title">Configurações</h1>
+
+            <div class="section-card form-card">
+                <h2><i class="fas fa-user"></i> Dados do Piloto</h2>
+                <form id="pilotForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="settingName">Nome Completo</label>
+                            <input type="text" id="settingName" placeholder="Nome do piloto">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingCanac">CANAC</label>
+                            <input type="text" id="settingCanac" placeholder="Número do CANAC">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingCma">Validade CMA</label>
+                            <input type="date" id="settingCma">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingHabilitacao">Validade Habilitação Agrícola</label>
+                            <input type="date" id="settingHabilitacao">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="section-card form-card">
+                <h2><i class="fas fa-sliders-h"></i> Limites Operacionais</h2>
+                <p class="settings-note">
+                    <i class="fas fa-info-circle"></i>
+                    Os limites padrão seguem a Lei 13.475/2017 para tripulação simples em avião convencional.
+                    Ajuste conforme Convenção Coletiva (CCT) vigente entre SNA e SINDAG.
+                </p>
+                <form id="limitsForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="limitFlightDay">Horas de Voo / Jornada</label>
+                            <input type="number" id="limitFlightDay" step="0.5" value="9.5">
+                            <small>Padrão: 9h30 (Art. 32)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitDutyDay">Jornada Diária (horas)</label>
+                            <input type="number" id="limitDutyDay" step="0.5" value="11">
+                            <small>Padrão: 11h (Art. 37)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitWorkWeek">Trabalho Semanal (horas)</label>
+                            <input type="number" id="limitWorkWeek" step="1" value="44">
+                            <small>Padrão: 44h (Art. 41)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitFlightMonth">Horas de Voo / Mês</label>
+                            <input type="number" id="limitFlightMonth" step="1" value="100">
+                            <small>Padrão: 100h convencional (Art. 30)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitWorkMonth">Trabalho Mensal (horas)</label>
+                            <input type="number" id="limitWorkMonth" step="1" value="176">
+                            <small>Limite absoluto: 176h (Art. 41)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitFlightYear">Horas de Voo / Ano</label>
+                            <input type="number" id="limitFlightYear" step="1" value="1000">
+                            <small>Padrão: 1.000h convencional (Art. 30)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitLandingsDay">Pousos / Jornada</label>
+                            <input type="number" id="limitLandingsDay" step="1" value="5">
+                            <small>Padrão: 5 pousos (Art. 32)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitRestHours">Repouso Mínimo (horas)</label>
+                            <input type="number" id="limitRestHours" step="0.5" value="12">
+                            <small>Padrão: 12h (Art. 43)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitDaysOffMonth">Folgas Mensais</label>
+                            <input type="number" id="limitDaysOffMonth" step="1" value="8">
+                            <small>Padrão: 8 folgas/mês</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="alertThreshold">Alerta de Proximidade (%)</label>
+                            <input type="number" id="alertThreshold" step="5" value="80" min="50" max="95">
+                            <small>Alertar ao atingir este % do limite</small>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Salvar Limites
+                        </button>
+                        <button type="button" class="btn btn-secondary" id="resetLimitsBtn">
+                            <i class="fas fa-undo"></i> Restaurar Padrão
+                        </button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-database"></i> Dados</h2>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="exportAllBtn">
+                        <i class="fas fa-download"></i> Exportar Todos os Dados (JSON)
+                    </button>
+                    <label class="btn btn-secondary">
+                        <i class="fas fa-upload"></i> Importar Dados (JSON)
+                        <input type="file" id="importDataBtn" accept=".json" style="display:none;">
+                    </label>
+                    <button class="btn btn-danger" id="clearDataBtn">
+                        <i class="fas fa-trash"></i> Limpar Todos os Dados
+                    </button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal" style="display:none;">
+        <div class="modal">
+            <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir este registro?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmDelete">Excluir</button>
+                <button class="btn btn-secondary" id="cancelDelete">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
