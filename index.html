@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AgroFlight - Diário de Bordo do Piloto Agrícola</title>
+    <link rel="stylesheet" href="css/style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+</head>
+<body>
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <i class="fas fa-plane"></i>
+            <h2>AgroFlight</h2>
+        </div>
+        <ul class="nav-menu">
+            <li class="nav-item active" data-page="dashboard">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Painel</span>
+            </li>
+            <li class="nav-item" data-page="logbook">
+                <i class="fas fa-book"></i>
+                <span>Diário de Bordo</span>
+            </li>
+            <li class="nav-item" data-page="limits">
+                <i class="fas fa-exclamation-triangle"></i>
+                <span>Limites Legais</span>
+            </li>
+            <li class="nav-item" data-page="settings">
+                <i class="fas fa-cog"></i>
+                <span>Configurações</span>
+            </li>
+        </ul>
+        <div class="sidebar-footer">
+            <p>Lei 13.475/2017</p>
+            <p>RBAC 137 | RBAC 117</p>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Top Bar -->
+        <header class="top-bar">
+            <button class="menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="top-bar-info">
+                <span id="currentDate"></span>
+                <span class="separator">|</span>
+                <span id="pilotName">Piloto</span>
+            </div>
+            <div class="top-bar-alert" id="topBarAlert" style="display:none;">
+                <i class="fas fa-bell"></i>
+                <span id="alertCount">0</span>
+            </div>
+        </header>
+
+        <!-- ==================== DASHBOARD ==================== -->
+        <section class="page active" id="page-dashboard">
+            <h1 class="page-title">Painel de Controle</h1>
+
+            <div class="alert-banner" id="alertBanner" style="display:none;">
+                <i class="fas fa-exclamation-circle"></i>
+                <span id="alertMessage"></span>
+            </div>
+
+            <!-- Primary Cards -->
+            <div class="cards-grid">
+                <div class="card">
+                    <div class="card-icon blue"><i class="fas fa-clock"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Hoje</h3>
+                        <p class="card-value" id="hoursToday">0:00</p>
+                        <div class="progress-bar"><div class="progress-fill blue" id="progressToday" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitToday">9h30</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon green"><i class="fas fa-calendar-week"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Semana</h3>
+                        <p class="card-value" id="hoursWeek">0:00</p>
+                        <div class="progress-bar"><div class="progress-fill green" id="progressWeek" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitWeek">44h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon orange"><i class="fas fa-calendar-alt"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Mês</h3>
+                        <p class="card-value" id="hoursMonth">0:00</p>
+                        <div class="progress-bar"><div class="progress-fill orange" id="progressMonth" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitMonth">100h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon red"><i class="fas fa-calendar"></i></div>
+                    <div class="card-info">
+                        <h3>Horas Ano</h3>
+                        <p class="card-value" id="hoursYear">0:00</p>
+                        <div class="progress-bar"><div class="progress-fill red" id="progressYear" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitYear">1.000h</span></small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Secondary Cards -->
+            <div class="cards-grid cards-secondary">
+                <div class="card">
+                    <div class="card-icon purple"><i class="fas fa-briefcase"></i></div>
+                    <div class="card-info">
+                        <h3>Jornada Hoje</h3>
+                        <p class="card-value" id="dutyToday">0:00</p>
+                        <div class="progress-bar"><div class="progress-fill purple" id="progressDuty" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitDuty">11h</span></small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon teal"><i class="fas fa-bed"></i></div>
+                    <div class="card-info">
+                        <h3>Descanso Mínimo</h3>
+                        <p class="card-value" id="restStatus">OK</p>
+                        <small>Mínimo: <span id="limitRest">12h</span> entre jornadas</small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon cyan"><i class="fas fa-plane-arrival"></i></div>
+                    <div class="card-info">
+                        <h3>Pousos Hoje</h3>
+                        <p class="card-value" id="landingsToday">0</p>
+                        <div class="progress-bar"><div class="progress-fill cyan" id="progressLandings" style="width:0%"></div></div>
+                        <small>Limite: <span id="limitLandings">5</span> por jornada</small>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon amber"><i class="fas fa-umbrella-beach"></i></div>
+                    <div class="card-info">
+                        <h3>Folgas no Mês</h3>
+                        <p class="card-value" id="daysOff">0</p>
+                        <small>Mínimo: <span id="limitDaysOff">8</span> folgas/mês</small>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Flights -->
+            <div class="section-card">
+                <h2><i class="fas fa-history"></i> Últimos Voos</h2>
+                <div class="table-container">
+                    <table id="recentFlightsTable">
+                        <thead>
+                            <tr>
+                                <th>Data</th>
+                                <th>Hora Apres.</th>
+                                <th>De</th>
+                                <th>Para</th>
+                                <th>Partida</th>
+                                <th>Corte</th>
+                                <th>Hs Voo</th>
+                                <th>Pousos</th>
+                                <th>NAT</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recentFlightsBody">
+                            <tr class="empty-row"><td colspan="9">Nenhum voo registrado</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== DIÁRIO DE BORDO ==================== -->
+        <section class="page" id="page-logbook">
+            <h1 class="page-title">Diário de Bordo - Registro de Voo (Aeronave Agrícola)</h1>
+
+            <!-- ===== PARTE I - CABEÇALHO DA AERONAVE ===== -->
+            <div class="section-card">
+                <h2><i class="fas fa-helicopter"></i> Dados da Aeronave</h2>
+                <p class="settings-note">
+                    <i class="fas fa-info-circle"></i>
+                    Preencha os dados da aeronave. Eles serão salvos e usados automaticamente nos registros.
+                </p>
+                <form id="aircraftForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="acMarcas">MARCAS (Prefixo)</label>
+                            <input type="text" id="acMarcas" placeholder="PT-XXX">
+                        </div>
+                        <div class="form-group">
+                            <label for="acFabricante">FABRICANTE</label>
+                            <input type="text" id="acFabricante" placeholder="Ex: Embraer / Neiva">
+                        </div>
+                        <div class="form-group">
+                            <label for="acModelo">MODELO</label>
+                            <input type="text" id="acModelo" placeholder="Ex: EMB-202A Ipanema">
+                        </div>
+                        <div class="form-group">
+                            <label for="acNS">N/S (Número de Série)</label>
+                            <input type="text" id="acNS" placeholder="Número de série">
+                        </div>
+                        <div class="form-group">
+                            <label for="acCatReg">CAT. REG.</label>
+                            <input type="text" id="acCatReg" placeholder="SAE">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Aeronave</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== PARTE I - NOVO REGISTRO DE VOO ===== -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-plus-circle"></i> Parte I - Novo Registro de Voo</h2>
+                <form id="flightForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="flightDate">DATA</label>
+                            <input type="date" id="flightDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="horaApres">HORA APRES.</label>
+                            <input type="time" id="horaApres" required>
+                            <small>Hora de apresentação do piloto</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="de">DE (Origem)</label>
+                            <input type="text" id="de" placeholder="Aeródromo / Pista" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="para">PARA (Destino)</label>
+                            <input type="text" id="para" placeholder="Aeródromo / Pista" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="partida">PARTIDA (Motor)</label>
+                            <input type="time" id="partida" required>
+                            <small>Hora de partida do motor</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="corte">CORTE (Motor)</label>
+                            <input type="time" id="corte" required>
+                            <small>Hora de corte do motor</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="pousosTotal">POUSOS TOTAL</label>
+                            <input type="number" id="pousosTotal" min="1" value="1" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="combTotal">COMB. TOTAL (litros)</label>
+                            <input type="number" id="combTotal" step="0.1" min="0" placeholder="Litros">
+                        </div>
+                        <div class="form-group">
+                            <label for="nomePiloto">NOME DO PILOTO</label>
+                            <input type="text" id="nomePiloto" placeholder="Nome completo" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="codigoAnac">CÓDIGO ANAC (CANAC)</label>
+                            <input type="text" id="codigoAnac" placeholder="Número CANAC">
+                        </div>
+                        <div class="form-group">
+                            <label for="nat">NAT* (Natureza do Voo)</label>
+                            <select id="nat" required>
+                                <option value="SA">SA - Serviço Aéreo Especializado</option>
+                                <option value="TR">TR - Translado da Aeronave</option>
+                                <option value="TN">TN - Treinamento</option>
+                                <option value="PV">PV - Caráter Privado</option>
+                                <option value="CQ">CQ - Cheque ou Recheque</option>
+                                <option value="EX">EX - Experiência</option>
+                                <option value="AE">AE - Autorização Especial de Voo</option>
+                                <option value="IN">IN - Instrução para INSPAC</option>
+                            </select>
+                        </div>
+                        <div class="form-group full-width">
+                            <label for="observacoes">INCIDENTES E OBSERVAÇÕES</label>
+                            <textarea id="observacoes" rows="2" placeholder="Condições meteorológicas, intercorrências, observações operacionais..."></textarea>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Registrar Voo</button>
+                        <button type="reset" class="btn btn-secondary"><i class="fas fa-eraser"></i> Limpar</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== PARTE I - TABELA DE REGISTROS (igual ao diário oficial) ===== -->
+            <div class="section-card">
+                <h2><i class="fas fa-list"></i> Parte I - Registro de Voo</h2>
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label for="filterMonth">Mês</label>
+                        <input type="month" id="filterMonth">
+                    </div>
+                    <button class="btn btn-secondary" id="exportBtn"><i class="fas fa-file-export"></i> Exportar CSV</button>
+                </div>
+                <div class="table-container">
+                    <table class="logbook-table" id="allFlightsTable">
+                        <thead>
+                            <tr>
+                                <th>Nº</th>
+                                <th>DATA</th>
+                                <th>HORA APRES.</th>
+                                <th>DE</th>
+                                <th>PARA</th>
+                                <th>PARTIDA</th>
+                                <th>CORTE</th>
+                                <th>HS VOO TOTAL</th>
+                                <th>POUSOS TOTAL</th>
+                                <th>COMB. TOTAL</th>
+                                <th>NOME DO PILOTO</th>
+                                <th>CÓD. ANAC</th>
+                                <th>NAT*</th>
+                                <th>AÇÕES</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allFlightsBody">
+                            <tr class="empty-row"><td colspan="14">Nenhum voo registrado</td></tr>
+                        </tbody>
+                        <tfoot id="flightsTfoot">
+                            <tr class="totals-row">
+                                <td colspan="7"><strong>TOTAL PÁG.</strong></td>
+                                <td id="totalPageHours"><strong>0:00</strong></td>
+                                <td id="totalPageLandings"><strong>0</strong></td>
+                                <td id="totalPageFuel"><strong>0</strong></td>
+                                <td colspan="4"></td>
+                            </tr>
+                            <tr class="totals-row">
+                                <td colspan="3"><strong>HS. TOTAIS ANTERIOR:</strong></td>
+                                <td colspan="2" id="hsTotaisAnterior">0:00</td>
+                                <td colspan="2"><strong>HS. TOTAIS DA PÁGINA:</strong></td>
+                                <td id="hsTotaisPagina">0:00</td>
+                                <td colspan="2"><strong>POUSOS ANT.:</strong></td>
+                                <td id="pousosAnteriores">0</td>
+                                <td><strong>POUSOS TOT.:</strong></td>
+                                <td id="pousosTotais">0</td>
+                                <td></td>
+                            </tr>
+                            <tr class="totals-row">
+                                <td colspan="3"><strong>HS. TOTAIS DA CÉLULA:</strong></td>
+                                <td colspan="11" id="hsTotaisCelula">0:00</td>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ===== REGISTRAR FOLGA ===== -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-umbrella-beach"></i> Registrar Folga</h2>
+                <form id="dayOffForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="dayOffDate">Data da Folga</label>
+                            <input type="date" id="dayOffDate" required>
+                        </div>
+                        <div class="form-group">
+                            <label for="dayOffType">Tipo</label>
+                            <select id="dayOffType">
+                                <option value="folga">Folga Regular</option>
+                                <option value="folga_fds">Folga Fim de Semana</option>
+                                <option value="feriado">Feriado</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Registrar Folga</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- ===== PARTE II - SITUAÇÃO TÉCNICA DA AERONAVE ===== -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-wrench"></i> Parte II - Situação Técnica da Aeronave</h2>
+
+                <!-- Manutenção -->
+                <div class="form-grid" style="margin-bottom: 24px;">
+                    <div class="form-group">
+                        <label for="ultManutHoras">HORAS Últ. Manutenção</label>
+                        <input type="text" id="ultManutHoras" placeholder="Horas">
+                    </div>
+                    <div class="form-group">
+                        <label for="ultManutTipo">TIPO Últ. Manutenção</label>
+                        <input type="text" id="ultManutTipo" placeholder="Tipo">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxManutHoras">HORAS Próx. Manutenção</label>
+                        <input type="text" id="proxManutHoras" placeholder="Horas">
+                    </div>
+                    <div class="form-group">
+                        <label for="proxManutTipo">TIPO Próx. Manutenção</label>
+                        <input type="text" id="proxManutTipo" placeholder="Tipo">
+                    </div>
+                    <div class="form-group">
+                        <label for="horasDisponiveis">HORAS DISP. ATÉ PRÓX. MANUT.</label>
+                        <input type="text" id="horasDisponiveis" placeholder="Horas disponíveis" readonly>
+                    </div>
+                </div>
+
+                <!-- Registro da Tripulação (Discrepâncias) -->
+                <h3 style="margin-bottom: 12px; color: var(--text-secondary); font-size: 15px;">Registro da Tripulação - Discrepâncias</h3>
+                <form id="discrepancyForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="discData">DATA</label>
+                            <input type="date" id="discData">
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label for="discDescricao">DISCREPÂNCIA</label>
+                            <input type="text" id="discDescricao" placeholder="Descreva a discrepância">
+                        </div>
+                        <div class="form-group">
+                            <label for="discCanac">CANAC</label>
+                            <input type="text" id="discCanac" placeholder="CANAC">
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-bottom: 16px;">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Adicionar Discrepância</button>
+                    </div>
+                </form>
+
+                <div class="table-container" style="margin-bottom: 24px;">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th colspan="4" style="text-align:center; background: var(--accent-orange); color: #000;">REGISTRO DA TRIPULAÇÃO</th>
+                                <th colspan="4" style="text-align:center; background: var(--accent-green); color: #000;">APROVAÇÃO DE RETORNO AO SERVIÇO</th>
+                            </tr>
+                            <tr>
+                                <th>DATA</th>
+                                <th>DISCREPÂNCIA</th>
+                                <th>CANAC</th>
+                                <th>RUB.</th>
+                                <th>DATA</th>
+                                <th>AÇÃO CORRETIVA</th>
+                                <th>CANAC</th>
+                                <th>RUB.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="discrepancyBody">
+                            <tr class="empty-row"><td colspan="8">Nenhuma discrepância registrada</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Aprovação de Retorno -->
+                <h3 style="margin-bottom: 12px; color: var(--text-secondary); font-size: 15px;">Aprovação de Retorno ao Serviço</h3>
+                <form id="correctiveForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="corrData">DATA</label>
+                            <input type="date" id="corrData">
+                        </div>
+                        <div class="form-group">
+                            <label for="corrDiscId">Discrepância Ref.</label>
+                            <select id="corrDiscId">
+                                <option value="">Selecione a discrepância</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="grid-column: span 2;">
+                            <label for="corrAcao">AÇÃO CORRETIVA</label>
+                            <input type="text" id="corrAcao" placeholder="Descreva a ação corretiva">
+                        </div>
+                        <div class="form-group">
+                            <label for="corrCanac">CANAC</label>
+                            <input type="text" id="corrCanac" placeholder="CANAC mecânico">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-check"></i> Registrar Ação Corretiva</button>
+                    </div>
+                </form>
+
+                <div class="form-actions" style="margin-top: 16px;">
+                    <button type="button" class="btn btn-primary" id="saveMaintBtn"><i class="fas fa-save"></i> Salvar Dados de Manutenção</button>
+                </div>
+            </div>
+
+            <!-- Legenda NAT -->
+            <div class="section-card">
+                <p style="font-size: 12px; color: var(--text-muted); line-height: 1.8;">
+                    <strong>* NAT (Natureza do Voo):</strong>
+                    Caráter Privado (<strong>PV</strong>);
+                    Treinamento (<strong>TN</strong>);
+                    Translado da Aeronave (<strong>TR</strong>);
+                    Cheque ou Recheque (<strong>CQ</strong>);
+                    Serviço Aéreo Especializado (<strong>SA</strong>);
+                    Experiência (<strong>EX</strong>);
+                    Autorização Especial de Voo (<strong>AE</strong>);
+                    Instrução para INSPAC (<strong>IN</strong>)
+                </p>
+            </div>
+        </section>
+
+        <!-- ==================== LIMITES LEGAIS ==================== -->
+        <section class="page" id="page-limits">
+            <h1 class="page-title">Limites Legais - Monitoramento</h1>
+
+            <div class="section-card">
+                <h2><i class="fas fa-gavel"></i> Base Legal</h2>
+                <div class="legal-info">
+                    <div class="legal-item">
+                        <h3>Lei 13.475/2017 (Lei do Aeronauta)</h3>
+                        <p>Define limites de horas de voo, jornada de trabalho, repouso e folgas para tripulantes.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>RBAC 137 (ANAC)</h3>
+                        <p>Regulamenta operações aeroagrícolas. Exige registro detalhado de horas no diário de bordo.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>RBAC 117 (ANAC)</h3>
+                        <p>Gerenciamento do risco de fadiga humana. Estabelece parâmetros de segurança.</p>
+                    </div>
+                    <div class="legal-item">
+                        <h3>Art. 302, Lei 7.565/1986 (CBA)</h3>
+                        <p>Exceder limites de horas de voo é infração administrativa punível com multa.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-chart-bar"></i> Status dos Limites</h2>
+                <div class="limits-grid" id="limitsGrid"></div>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-bell"></i> Histórico de Alertas</h2>
+                <div class="alerts-list" id="alertsList">
+                    <p class="empty-message">Nenhum alerta registrado</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== CONFIGURAÇÕES ==================== -->
+        <section class="page" id="page-settings">
+            <h1 class="page-title">Configurações</h1>
+
+            <div class="section-card form-card">
+                <h2><i class="fas fa-user"></i> Dados do Piloto</h2>
+                <form id="pilotForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="settingName">Nome Completo</label>
+                            <input type="text" id="settingName" placeholder="Nome do piloto">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingCanac">CANAC</label>
+                            <input type="text" id="settingCanac" placeholder="Número do CANAC">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingCma">Validade CMA</label>
+                            <input type="date" id="settingCma">
+                        </div>
+                        <div class="form-group">
+                            <label for="settingHabilitacao">Validade Habilitação Agrícola</label>
+                            <input type="date" id="settingHabilitacao">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="section-card form-card">
+                <h2><i class="fas fa-sliders-h"></i> Limites Operacionais</h2>
+                <p class="settings-note">
+                    <i class="fas fa-info-circle"></i>
+                    Os limites padrão seguem a Lei 13.475/2017 para tripulação simples em avião convencional.
+                    Ajuste conforme Convenção Coletiva (CCT) vigente entre SNA e SINDAG.
+                </p>
+                <form id="limitsForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="limitFlightDay">Horas de Voo / Jornada</label>
+                            <input type="number" id="limitFlightDay" step="0.5" value="9.5">
+                            <small>Padrão: 9h30 (Art. 32)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitDutyDay">Jornada Diária (horas)</label>
+                            <input type="number" id="limitDutyDay" step="0.5" value="11">
+                            <small>Padrão: 11h (Art. 37)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitWorkWeek">Trabalho Semanal (horas)</label>
+                            <input type="number" id="limitWorkWeek" step="1" value="44">
+                            <small>Padrão: 44h (Art. 41)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitFlightMonth">Horas de Voo / Mês</label>
+                            <input type="number" id="limitFlightMonth" step="1" value="100">
+                            <small>Padrão: 100h convencional (Art. 30)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitWorkMonth">Trabalho Mensal (horas)</label>
+                            <input type="number" id="limitWorkMonth" step="1" value="176">
+                            <small>Limite absoluto: 176h (Art. 41)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitFlightYear">Horas de Voo / Ano</label>
+                            <input type="number" id="limitFlightYear" step="1" value="1000">
+                            <small>Padrão: 1.000h convencional (Art. 30)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitLandingsDay">Pousos / Jornada</label>
+                            <input type="number" id="limitLandingsDay" step="1" value="5">
+                            <small>Padrão: 5 pousos (Art. 32)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitRestHours">Repouso Mínimo (horas)</label>
+                            <input type="number" id="limitRestHours" step="0.5" value="12">
+                            <small>Padrão: 12h (Art. 43)</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="limitDaysOffMonth">Folgas Mensais</label>
+                            <input type="number" id="limitDaysOffMonth" step="1" value="8">
+                            <small>Padrão: 8 folgas/mês</small>
+                        </div>
+                        <div class="form-group">
+                            <label for="alertThreshold">Alerta de Proximidade (%)</label>
+                            <input type="number" id="alertThreshold" step="5" value="80" min="50" max="95">
+                            <small>Alertar ao atingir este % do limite</small>
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Limites</button>
+                        <button type="button" class="btn btn-secondary" id="resetLimitsBtn"><i class="fas fa-undo"></i> Restaurar Padrão</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Totais acumulados -->
+            <div class="section-card form-card">
+                <h2><i class="fas fa-calculator"></i> Horas Totais Anteriores</h2>
+                <p class="settings-note">
+                    <i class="fas fa-info-circle"></i>
+                    Informe as horas e pousos acumulados <strong>antes</strong> de começar a usar o app. Esses valores alimentam os campos "HS. TOTAIS ANTERIOR" e "POUSOS ANTERIORES" do diário.
+                </p>
+                <form id="totalsForm">
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="hsTotaisAnteriorInput">HS. TOTAIS ANTERIOR (piloto)</label>
+                            <input type="number" id="hsTotaisAnteriorInput" step="0.1" min="0" value="0" placeholder="Ex: 1500.5">
+                        </div>
+                        <div class="form-group">
+                            <label for="pousosAnteriorInput">POUSOS ANTERIORES</label>
+                            <input type="number" id="pousosAnteriorInput" step="1" min="0" value="0" placeholder="Ex: 5000">
+                        </div>
+                        <div class="form-group">
+                            <label for="hsCelulaAnteriorInput">HS. TOTAIS DA CÉLULA (aeronave)</label>
+                            <input type="number" id="hsCelulaAnteriorInput" step="0.1" min="0" value="0" placeholder="Ex: 3200.0">
+                        </div>
+                    </div>
+                    <div class="form-actions">
+                        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar Totais</button>
+                    </div>
+                </form>
+            </div>
+
+            <div class="section-card">
+                <h2><i class="fas fa-database"></i> Dados</h2>
+                <div class="form-actions">
+                    <button class="btn btn-secondary" id="exportAllBtn"><i class="fas fa-download"></i> Exportar Todos os Dados (JSON)</button>
+                    <label class="btn btn-secondary">
+                        <i class="fas fa-upload"></i> Importar Dados (JSON)
+                        <input type="file" id="importDataBtn" accept=".json" style="display:none;">
+                    </label>
+                    <button class="btn btn-danger" id="clearDataBtn"><i class="fas fa-trash"></i> Limpar Todos os Dados</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal-overlay" id="deleteModal" style="display:none;">
+        <div class="modal">
+            <h3><i class="fas fa-exclamation-triangle"></i> Confirmar Exclusão</h3>
+            <p>Tem certeza que deseja excluir este registro?</p>
+            <div class="modal-actions">
+                <button class="btn btn-danger" id="confirmDelete">Excluir</button>
+                <button class="btn btn-secondary" id="cancelDelete">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>
