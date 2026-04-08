@@ -1,32 +1,28 @@
 // ===================================
-// AgroFlight - Diário de Bordo
+// AgroFlight - Diário de Bordo Oficial
 // Piloto Agrícola - Monitoramento de Horas
 // Lei 13.475/2017 | RBAC 137 | RBAC 117
+// Formato: Diário de Bordo ANAC - Aeronave Agrícola
 // ===================================
 
 (function () {
     'use strict';
 
-    // ===== DEFAULT LIMITS (Lei 13.475/2017 - Tripulação simples, avião convencional) =====
     const DEFAULT_LIMITS = {
-        flightDay: 9.5,       // 9h30 de voo por jornada (Art. 32)
-        dutyDay: 11,          // 11h de jornada diária (Art. 37)
-        workWeek: 44,         // 44h semanais (Art. 41)
-        flightMonth: 100,     // 100h de voo/mês (Art. 30)
-        workMonth: 176,       // 176h de trabalho/mês (Art. 41) - limite absoluto
-        flightYear: 1000,     // 1.000h de voo/ano (Art. 30)
-        landingsDay: 5,       // 5 pousos por jornada (Art. 32)
-        restHours: 12,        // 12h de repouso mínimo (Art. 43)
-        daysOffMonth: 8,      // 8 folgas/mês
-        alertThreshold: 80    // alertar a 80% do limite
+        flightDay: 9.5, dutyDay: 11, workWeek: 44, flightMonth: 100,
+        workMonth: 176, flightYear: 1000, landingsDay: 5,
+        restHours: 12, daysOffMonth: 8, alertThreshold: 80
     };
 
-    // ===== STATE =====
     let flights = [];
     let daysOff = [];
     let alerts = [];
     let limits = { ...DEFAULT_LIMITS };
     let pilotInfo = { name: '', canac: '', cma: '', habilitacao: '' };
+    let aircraftInfo = { marcas: '', fabricante: '', modelo: '', ns: '', catReg: '' };
+    let maintenance = { ultManutHoras: '', ultManutTipo: '', proxManutHoras: '', proxManutTipo: '' };
+    let discrepancies = [];
+    let totals = { hsTotaisAnterior: 0, pousosAnterior: 0, hsCelulaAnterior: 0 };
     let deleteTargetId = null;
 
     // ===== INITIALIZATION =====
@@ -41,40 +37,35 @@
         refreshAll();
     }
 
-    // ===== DATA PERSISTENCE (localStorage) =====
     function loadData() {
         try {
             flights = JSON.parse(localStorage.getItem('agroflight_flights') || '[]');
             daysOff = JSON.parse(localStorage.getItem('agroflight_daysoff') || '[]');
             alerts = JSON.parse(localStorage.getItem('agroflight_alerts') || '[]');
-            const savedLimits = localStorage.getItem('agroflight_limits');
-            if (savedLimits) limits = { ...DEFAULT_LIMITS, ...JSON.parse(savedLimits) };
-            const savedPilot = localStorage.getItem('agroflight_pilot');
-            if (savedPilot) pilotInfo = JSON.parse(savedPilot);
-        } catch (e) {
-            console.error('Erro ao carregar dados:', e);
-        }
+            discrepancies = JSON.parse(localStorage.getItem('agroflight_discrepancies') || '[]');
+            var sl = localStorage.getItem('agroflight_limits');
+            if (sl) limits = { ...DEFAULT_LIMITS, ...JSON.parse(sl) };
+            var sp = localStorage.getItem('agroflight_pilot');
+            if (sp) pilotInfo = JSON.parse(sp);
+            var sa = localStorage.getItem('agroflight_aircraft');
+            if (sa) aircraftInfo = JSON.parse(sa);
+            var sm = localStorage.getItem('agroflight_maintenance');
+            if (sm) maintenance = JSON.parse(sm);
+            var st = localStorage.getItem('agroflight_totals');
+            if (st) totals = JSON.parse(st);
+        } catch (e) { console.error('Erro ao carregar dados:', e); }
     }
 
-    function saveFlights() {
-        localStorage.setItem('agroflight_flights', JSON.stringify(flights));
-    }
-
-    function saveDaysOff() {
-        localStorage.setItem('agroflight_daysoff', JSON.stringify(daysOff));
-    }
-
-    function saveAlerts() {
-        localStorage.setItem('agroflight_alerts', JSON.stringify(alerts));
-    }
-
-    function saveLimits() {
-        localStorage.setItem('agroflight_limits', JSON.stringify(limits));
-    }
-
-    function savePilot() {
-        localStorage.setItem('agroflight_pilot', JSON.stringify(pilotInfo));
-    }
+    function save(key, data) { localStorage.setItem('agroflight_' + key, JSON.stringify(data)); }
+    function saveFlights() { save('flights', flights); }
+    function saveDaysOff() { save('daysoff', daysOff); }
+    function saveAlerts() { save('alerts', alerts); }
+    function saveLimits() { save('limits', limits); }
+    function savePilot() { save('pilot', pilotInfo); }
+    function saveAircraft() { save('aircraft', aircraftInfo); }
+    function saveMaintenance() { save('maintenance', maintenance); }
+    function saveDiscrepancies() { save('discrepancies', discrepancies); }
+    function saveTotals() { save('totals', totals); }
 
     // ===== NAVIGATION =====
     function setupNavigation() {
@@ -143,11 +134,11 @@
 
     // ===== CALCULATIONS =====
     function calcFlightHours(flight) {
-        return timeDiffHours(flight.takeoffTime, flight.landingTime);
+        return timeDiffHours(flight.partida, flight.corte);
     }
 
     function calcDutyHours(flight) {
-        return timeDiffHours(flight.dutyStart, flight.dutyEnd);
+        return timeDiffHours(flight.horaApres, flight.corte);
     }
 
     function getFlightsForDate(dateStr) {
@@ -187,17 +178,23 @@
     }
 
     function sumLandings(flightList) {
-        return flightList.reduce((sum, f) => sum + (parseInt(f.landings) || 0), 0);
+        return flightList.reduce((sum, f) => sum + (parseInt(f.pousosTotal) || 0), 0);
+    }
+
+    function sumFuel(flightList) {
+        return flightList.reduce((sum, f) => sum + (parseFloat(f.combTotal) || 0), 0);
     }
 
     function getRestHoursSinceLastFlight() {
         if (flights.length === 0) return Infinity;
         const sorted = [...flights].sort((a, b) => {
             if (a.date !== b.date) return b.date.localeCompare(a.date);
-            return b.dutyEnd.localeCompare(a.dutyEnd);
+            return b.corte.localeCompare(a.corte);
         });
         const lastFlight = sorted[0];
-        const lastEnd = new Date(lastFlight.date + 'T' + lastFlight.dutyEnd);
+        // Repouso inicia 30 min após corte do motor (Lei 13.475/2017)
+        const lastEnd = new Date(lastFlight.date + 'T' + lastFlight.corte);
+        lastEnd.setMinutes(lastEnd.getMinutes() + 30);
         const now = new Date();
         return (now - lastEnd) / (1000 * 60 * 60);
     }
@@ -385,63 +382,72 @@
 
     function updateRecentFlightsTable() {
         const tbody = document.getElementById('recentFlightsBody');
-        const recent = [...flights].sort((a, b) => b.date.localeCompare(a.date) || b.takeoffTime.localeCompare(a.takeoffTime)).slice(0, 10);
-
+        const recent = [...flights].sort((a, b) => b.date.localeCompare(a.date) || b.partida.localeCompare(a.partida)).slice(0, 10);
         if (recent.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhum voo registrado</td></tr>';
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="9">Nenhum voo registrado</td></tr>';
             return;
         }
-
-        tbody.innerHTML = recent.map(f => {
-            const flightHours = formatHours(calcFlightHours(f));
-            return `<tr>
-                <td>${formatDate(f.date)}</td>
-                <td>${esc(f.aircraft)}</td>
-                <td>${esc(f.origin)}</td>
-                <td>${esc(f.destination)}</td>
-                <td>${f.takeoffTime}</td>
-                <td>${f.landingTime}</td>
-                <td><strong>${flightHours}</strong></td>
-                <td>${getOperationLabel(f.operation)}</td>
-            </tr>`;
-        }).join('');
+        tbody.innerHTML = recent.map(f => `<tr>
+            <td>${formatDate(f.date)}</td>
+            <td>${f.horaApres}</td>
+            <td>${esc(f.de)}</td>
+            <td>${esc(f.para)}</td>
+            <td>${f.partida}</td>
+            <td>${f.corte}</td>
+            <td><strong>${formatHours(calcFlightHours(f))}</strong></td>
+            <td>${f.pousosTotal}</td>
+            <td>${f.nat}</td>
+        </tr>`).join('');
     }
 
     // ===== LOGBOOK =====
     function updateAllFlightsTable(filterMonth) {
         const tbody = document.getElementById('allFlightsBody');
         let filtered = [...flights];
-
-        if (filterMonth) {
-            filtered = filtered.filter(f => getMonthKey(f.date) === filterMonth);
-        }
-
-        filtered.sort((a, b) => b.date.localeCompare(a.date) || b.takeoffTime.localeCompare(a.takeoffTime));
+        if (filterMonth) filtered = filtered.filter(f => getMonthKey(f.date) === filterMonth);
+        filtered.sort((a, b) => a.date.localeCompare(b.date) || a.partida.localeCompare(b.partida));
 
         if (filtered.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="10">Nenhum voo registrado</td></tr>';
-            return;
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="14">Nenhum voo registrado</td></tr>';
+        } else {
+            tbody.innerHTML = filtered.map((f, i) => `<tr>
+                <td>${i + 1}</td>
+                <td>${formatDate(f.date)}</td>
+                <td>${f.horaApres}</td>
+                <td>${esc(f.de)}</td>
+                <td>${esc(f.para)}</td>
+                <td>${f.partida}</td>
+                <td>${f.corte}</td>
+                <td><strong>${formatHours(calcFlightHours(f))}</strong></td>
+                <td>${f.pousosTotal}</td>
+                <td>${f.combTotal || '-'}</td>
+                <td>${esc(f.nomePiloto)}</td>
+                <td>${esc(f.codigoAnac)}</td>
+                <td>${f.nat}</td>
+                <td><button class="btn btn-danger btn-sm" onclick="AgroFlight.deleteFlight('${f.id}')"><i class="fas fa-trash"></i></button></td>
+            </tr>`).join('');
         }
 
-        tbody.innerHTML = filtered.map(f => {
-            const flightHours = formatHours(calcFlightHours(f));
-            return `<tr>
-                <td>${formatDate(f.date)}</td>
-                <td>${esc(f.aircraft)}</td>
-                <td>${esc(f.origin)}</td>
-                <td>${esc(f.destination)}</td>
-                <td>${f.takeoffTime}</td>
-                <td>${f.landingTime}</td>
-                <td><strong>${flightHours}</strong></td>
-                <td>${f.landings}</td>
-                <td>${getOperationLabel(f.operation)}</td>
-                <td>
-                    <button class="btn btn-danger btn-sm" onclick="AgroFlight.deleteFlight('${f.id}')">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </td>
-            </tr>`;
-        }).join('');
+        // Update totals
+        var pageHours = sumFlightHours(filtered);
+        var pageLandings = sumLandings(filtered);
+        var pageFuel = sumFuel(filtered);
+        var allHours = sumFlightHours(flights);
+        var allLandings = sumLandings(flights);
+
+        document.getElementById('totalPageHours').innerHTML = '<strong>' + formatHours(pageHours) + '</strong>';
+        document.getElementById('totalPageLandings').innerHTML = '<strong>' + pageLandings + '</strong>';
+        document.getElementById('totalPageFuel').innerHTML = '<strong>' + pageFuel.toFixed(1) + '</strong>';
+        document.getElementById('hsTotaisAnterior').textContent = formatHours(totals.hsTotaisAnterior);
+        document.getElementById('hsTotaisPagina').textContent = formatHours(pageHours);
+        document.getElementById('pousosAnteriores').textContent = totals.pousosAnterior;
+        document.getElementById('pousosTotais').textContent = totals.pousosAnterior + allLandings;
+        document.getElementById('hsTotaisCelula').textContent = formatHours(totals.hsCelulaAnterior + allHours);
+
+        // Update discrepancy table
+        updateDiscrepancyTable();
+        updateCorrectiveSelect();
+        updateHorasDisponiveis();
     }
 
     // ===== LIMITS PAGE =====
@@ -575,141 +581,209 @@
 
     // ===== FORMS =====
     function setupForms() {
-        // Flight form
-        const flightForm = document.getElementById('flightForm');
-        document.getElementById('flightDate').value = getToday();
-        document.getElementById('filterMonth').value = getToday().substring(0, 7);
+        var $ = function(id) { return document.getElementById(id); };
+        $('flightDate').value = getToday();
+        $('filterMonth').value = getToday().substring(0, 7);
 
-        flightForm.addEventListener('submit', function (e) {
+        // Auto-fill pilot name/CANAC
+        if (pilotInfo.name) $('nomePiloto').value = pilotInfo.name;
+        if (pilotInfo.canac) $('codigoAnac').value = pilotInfo.canac;
+
+        // === Flight Form ===
+        $('flightForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            const flight = {
+            var flight = {
                 id: generateId(),
-                date: document.getElementById('flightDate').value,
-                aircraft: document.getElementById('aircraft').value.trim().toUpperCase(),
-                aircraftModel: document.getElementById('aircraftModel').value.trim(),
-                aircraftType: document.getElementById('aircraftType').value,
-                origin: document.getElementById('origin').value.trim(),
-                destination: document.getElementById('destination').value.trim(),
-                takeoffTime: document.getElementById('takeoffTime').value,
-                landingTime: document.getElementById('landingTime').value,
-                dutyStart: document.getElementById('dutyStart').value,
-                dutyEnd: document.getElementById('dutyEnd').value,
-                landings: parseInt(document.getElementById('landings').value) || 1,
-                operation: document.getElementById('operation').value,
-                product: document.getElementById('product').value.trim(),
-                area: parseFloat(document.getElementById('area').value) || 0,
-                observations: document.getElementById('observations').value.trim(),
+                date: $('flightDate').value,
+                horaApres: $('horaApres').value,
+                de: $('de').value.trim(),
+                para: $('para').value.trim(),
+                partida: $('partida').value,
+                corte: $('corte').value,
+                pousosTotal: parseInt($('pousosTotal').value) || 1,
+                combTotal: parseFloat($('combTotal').value) || 0,
+                nomePiloto: $('nomePiloto').value.trim(),
+                codigoAnac: $('codigoAnac').value.trim(),
+                nat: $('nat').value,
+                observacoes: $('observacoes').value.trim(),
                 createdAt: new Date().toISOString()
             };
-
-            // Validations
-            if (timeDiffHours(flight.takeoffTime, flight.landingTime) <= 0) {
-                showToast('Hora de pouso deve ser após a decolagem', 'error');
-                return;
+            if (timeDiffHours(flight.partida, flight.corte) <= 0) {
+                showToast('Hora de corte deve ser após a partida', 'error'); return;
             }
-            if (timeDiffHours(flight.dutyStart, flight.dutyEnd) <= 0) {
-                showToast('Fim de jornada deve ser após o início', 'error');
-                return;
-            }
-
             flights.push(flight);
             saveFlights();
-            flightForm.reset();
-            document.getElementById('flightDate').value = getToday();
-            document.getElementById('landings').value = '1';
+            this.reset();
+            $('flightDate').value = getToday();
+            $('pousosTotal').value = '1';
+            if (pilotInfo.name) $('nomePiloto').value = pilotInfo.name;
+            if (pilotInfo.canac) $('codigoAnac').value = pilotInfo.canac;
             refreshAll();
             showToast('Voo registrado com sucesso!', 'success');
-
-            // Check for immediate limit violations
-            const activeAlerts = checkLimits();
-            if (activeAlerts.some(a => a.type === 'danger')) {
-                showToast('ATENÇÃO: Limite legal excedido!', 'error');
-            }
+            var al = checkLimits();
+            if (al.some(function(a) { return a.type === 'danger'; })) showToast('LIMITE LEGAL EXCEDIDO!', 'error');
         });
 
-        // Day off form
-        const dayOffForm = document.getElementById('dayOffForm');
-        document.getElementById('dayOffDate').value = getToday();
-
-        dayOffForm.addEventListener('submit', function (e) {
+        // === Aircraft Form ===
+        $('aircraftForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            const dayOff = {
-                id: generateId(),
-                date: document.getElementById('dayOffDate').value,
-                type: document.getElementById('dayOffType').value,
-                createdAt: new Date().toISOString()
-            };
+            aircraftInfo.marcas = $('acMarcas').value.trim().toUpperCase();
+            aircraftInfo.fabricante = $('acFabricante').value.trim();
+            aircraftInfo.modelo = $('acModelo').value.trim();
+            aircraftInfo.ns = $('acNS').value.trim();
+            aircraftInfo.catReg = $('acCatReg').value.trim();
+            saveAircraft();
+            showToast('Dados da aeronave salvos!', 'success');
+        });
 
-            // Check duplicate
-            if (daysOff.find(d => d.date === dayOff.date)) {
-                showToast('Folga já registrada para esta data', 'error');
-                return;
+        // === Day Off Form ===
+        $('dayOffDate').value = getToday();
+        $('dayOffForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var dt = $('dayOffDate').value;
+            if (daysOff.find(function(d) { return d.date === dt; })) {
+                showToast('Folga já registrada para esta data', 'error'); return;
             }
-
-            daysOff.push(dayOff);
+            daysOff.push({ id: generateId(), date: dt, type: $('dayOffType').value, createdAt: new Date().toISOString() });
             saveDaysOff();
-            dayOffForm.reset();
-            document.getElementById('dayOffDate').value = getToday();
+            this.reset(); $('dayOffDate').value = getToday();
             refreshAll();
             showToast('Folga registrada!', 'success');
         });
 
-        // Pilot form
-        const pilotForm = document.getElementById('pilotForm');
-        pilotForm.addEventListener('submit', function (e) {
+        // === Discrepancy Form ===
+        $('discData').value = getToday();
+        $('discrepancyForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            pilotInfo.name = document.getElementById('settingName').value.trim();
-            pilotInfo.canac = document.getElementById('settingCanac').value.trim();
-            pilotInfo.cma = document.getElementById('settingCma').value;
-            pilotInfo.habilitacao = document.getElementById('settingHabilitacao').value;
+            discrepancies.push({
+                id: generateId(),
+                date: $('discData').value,
+                descricao: $('discDescricao').value.trim(),
+                canac: $('discCanac').value.trim(),
+                corrective: null
+            });
+            saveDiscrepancies();
+            this.reset(); $('discData').value = getToday();
+            refreshAll();
+            showToast('Discrepância registrada!', 'success');
+        });
+
+        // === Corrective Action Form ===
+        $('corrData').value = getToday();
+        $('correctiveForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            var discId = $('corrDiscId').value;
+            if (!discId) { showToast('Selecione uma discrepância', 'error'); return; }
+            var disc = discrepancies.find(function(d) { return d.id === discId; });
+            if (disc) {
+                disc.corrective = {
+                    data: $('corrData').value,
+                    acao: $('corrAcao').value.trim(),
+                    canac: $('corrCanac').value.trim()
+                };
+                saveDiscrepancies();
+                this.reset(); $('corrData').value = getToday();
+                refreshAll();
+                showToast('Ação corretiva registrada!', 'success');
+            }
+        });
+
+        // === Maintenance Save ===
+        $('saveMaintBtn').addEventListener('click', function () {
+            maintenance.ultManutHoras = $('ultManutHoras').value.trim();
+            maintenance.ultManutTipo = $('ultManutTipo').value.trim();
+            maintenance.proxManutHoras = $('proxManutHoras').value.trim();
+            maintenance.proxManutTipo = $('proxManutTipo').value.trim();
+            saveMaintenance();
+            updateHorasDisponiveis();
+            showToast('Dados de manutenção salvos!', 'success');
+        });
+
+        // === Totals Form ===
+        $('totalsForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            totals.hsTotaisAnterior = parseFloat($('hsTotaisAnteriorInput').value) || 0;
+            totals.pousosAnterior = parseInt($('pousosAnteriorInput').value) || 0;
+            totals.hsCelulaAnterior = parseFloat($('hsCelulaAnteriorInput').value) || 0;
+            saveTotals();
+            refreshAll();
+            showToast('Totais anteriores salvos!', 'success');
+        });
+
+        // === Pilot Form ===
+        $('pilotForm').addEventListener('submit', function (e) {
+            e.preventDefault();
+            pilotInfo.name = $('settingName').value.trim();
+            pilotInfo.canac = $('settingCanac').value.trim();
+            pilotInfo.cma = $('settingCma').value;
+            pilotInfo.habilitacao = $('settingHabilitacao').value;
             savePilot();
             applySettings();
             showToast('Dados do piloto salvos!', 'success');
         });
 
-        // Limits form
-        const limitsForm = document.getElementById('limitsForm');
-        limitsForm.addEventListener('submit', function (e) {
+        // === Limits Form ===
+        $('limitsForm').addEventListener('submit', function (e) {
             e.preventDefault();
-            limits.flightDay = parseFloat(document.getElementById('limitFlightDay').value) || DEFAULT_LIMITS.flightDay;
-            limits.dutyDay = parseFloat(document.getElementById('limitDutyDay').value) || DEFAULT_LIMITS.dutyDay;
-            limits.workWeek = parseFloat(document.getElementById('limitWorkWeek').value) || DEFAULT_LIMITS.workWeek;
-            limits.flightMonth = parseFloat(document.getElementById('limitFlightMonth').value) || DEFAULT_LIMITS.flightMonth;
-            limits.workMonth = parseFloat(document.getElementById('limitWorkMonth').value) || DEFAULT_LIMITS.workMonth;
-            limits.flightYear = parseFloat(document.getElementById('limitFlightYear').value) || DEFAULT_LIMITS.flightYear;
-            limits.landingsDay = parseInt(document.getElementById('limitLandingsDay').value) || DEFAULT_LIMITS.landingsDay;
-            limits.restHours = parseFloat(document.getElementById('limitRestHours').value) || DEFAULT_LIMITS.restHours;
-            limits.daysOffMonth = parseInt(document.getElementById('limitDaysOffMonth').value) || DEFAULT_LIMITS.daysOffMonth;
-            limits.alertThreshold = parseInt(document.getElementById('alertThreshold').value) || DEFAULT_LIMITS.alertThreshold;
-
-            // Enforce absolute limit of 176h monthly work
-            if (limits.workMonth > 176) {
-                limits.workMonth = 176;
-                document.getElementById('limitWorkMonth').value = 176;
-                showToast('Limite mensal de trabalho não pode exceder 176h (Art. 41)', 'error');
-            }
-
-            saveLimits();
-            refreshAll();
+            limits.flightDay = parseFloat($('limitFlightDay').value) || DEFAULT_LIMITS.flightDay;
+            limits.dutyDay = parseFloat($('limitDutyDay').value) || DEFAULT_LIMITS.dutyDay;
+            limits.workWeek = parseFloat($('limitWorkWeek').value) || DEFAULT_LIMITS.workWeek;
+            limits.flightMonth = parseFloat($('limitFlightMonth').value) || DEFAULT_LIMITS.flightMonth;
+            limits.workMonth = parseFloat($('limitWorkMonth').value) || DEFAULT_LIMITS.workMonth;
+            limits.flightYear = parseFloat($('limitFlightYear').value) || DEFAULT_LIMITS.flightYear;
+            limits.landingsDay = parseInt($('limitLandingsDay').value) || DEFAULT_LIMITS.landingsDay;
+            limits.restHours = parseFloat($('limitRestHours').value) || DEFAULT_LIMITS.restHours;
+            limits.daysOffMonth = parseInt($('limitDaysOffMonth').value) || DEFAULT_LIMITS.daysOffMonth;
+            limits.alertThreshold = parseInt($('alertThreshold').value) || DEFAULT_LIMITS.alertThreshold;
+            if (limits.workMonth > 176) { limits.workMonth = 176; $('limitWorkMonth').value = 176; showToast('Limite mensal não pode exceder 176h (Art. 41)', 'error'); }
+            saveLimits(); refreshAll();
             showToast('Limites atualizados!', 'success');
         });
 
-        // Reset limits
-        document.getElementById('resetLimitsBtn').addEventListener('click', function () {
-            limits = { ...DEFAULT_LIMITS };
-            saveLimits();
-            populateLimitsForm();
-            refreshAll();
+        $('resetLimitsBtn').addEventListener('click', function () {
+            limits = { ...DEFAULT_LIMITS }; saveLimits(); populateLimitsForm(); refreshAll();
             showToast('Limites restaurados ao padrão', 'success');
         });
 
-        // Filter
-        document.getElementById('filterMonth').addEventListener('change', function () {
-            updateAllFlightsTable(this.value);
-        });
+        $('filterMonth').addEventListener('change', function () { updateAllFlightsTable(this.value); });
+        $('exportBtn').addEventListener('click', exportCSV);
+    }
 
-        // Export CSV
-        document.getElementById('exportBtn').addEventListener('click', exportCSV);
+    function updateDiscrepancyTable() {
+        var tbody = document.getElementById('discrepancyBody');
+        if (discrepancies.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="8">Nenhuma discrepância registrada</td></tr>';
+            return;
+        }
+        tbody.innerHTML = discrepancies.map(d => {
+            var c = d.corrective;
+            return `<tr>
+                <td>${formatDate(d.date)}</td>
+                <td>${esc(d.descricao)}</td>
+                <td>${esc(d.canac)}</td>
+                <td>-</td>
+                <td>${c ? formatDate(c.data) : ''}</td>
+                <td>${c ? esc(c.acao) : ''}</td>
+                <td>${c ? esc(c.canac) : ''}</td>
+                <td>${c ? '-' : ''}</td>
+            </tr>`;
+        }).join('');
+    }
+
+    function updateCorrectiveSelect() {
+        var sel = document.getElementById('corrDiscId');
+        var pending = discrepancies.filter(d => !d.corrective);
+        sel.innerHTML = '<option value="">Selecione a discrepância</option>';
+        pending.forEach(d => {
+            sel.innerHTML += '<option value="' + d.id + '">' + formatDate(d.date) + ' - ' + esc(d.descricao).substring(0, 40) + '</option>';
+        });
+    }
+
+    function updateHorasDisponiveis() {
+        var prox = parseFloat(maintenance.proxManutHoras) || 0;
+        var celulaTotal = totals.hsCelulaAnterior + sumFlightHours(flights);
+        var disp = prox > 0 ? prox - celulaTotal : 0;
+        document.getElementById('horasDisponiveis').value = disp > 0 ? disp.toFixed(1) + 'h' : (prox > 0 ? '0 (VENCIDA)' : '');
     }
 
     function populateLimitsForm() {
@@ -726,11 +800,30 @@
     }
 
     function applySettings() {
-        document.getElementById('pilotName').textContent = pilotInfo.name || 'Piloto';
-        document.getElementById('settingName').value = pilotInfo.name || '';
-        document.getElementById('settingCanac').value = pilotInfo.canac || '';
-        document.getElementById('settingCma').value = pilotInfo.cma || '';
-        document.getElementById('settingHabilitacao').value = pilotInfo.habilitacao || '';
+        var $ = function(id) { return document.getElementById(id); };
+        $('pilotName').textContent = pilotInfo.name || 'Piloto';
+        $('settingName').value = pilotInfo.name || '';
+        $('settingCanac').value = pilotInfo.canac || '';
+        $('settingCma').value = pilotInfo.cma || '';
+        $('settingHabilitacao').value = pilotInfo.habilitacao || '';
+        // Aircraft
+        $('acMarcas').value = aircraftInfo.marcas || '';
+        $('acFabricante').value = aircraftInfo.fabricante || '';
+        $('acModelo').value = aircraftInfo.modelo || '';
+        $('acNS').value = aircraftInfo.ns || '';
+        $('acCatReg').value = aircraftInfo.catReg || '';
+        // Maintenance
+        $('ultManutHoras').value = maintenance.ultManutHoras || '';
+        $('ultManutTipo').value = maintenance.ultManutTipo || '';
+        $('proxManutHoras').value = maintenance.proxManutHoras || '';
+        $('proxManutTipo').value = maintenance.proxManutTipo || '';
+        // Totals
+        $('hsTotaisAnteriorInput').value = totals.hsTotaisAnterior || 0;
+        $('pousosAnteriorInput').value = totals.pousosAnterior || 0;
+        $('hsCelulaAnteriorInput').value = totals.hsCelulaAnterior || 0;
+        // Auto-fill pilot in flight form
+        if (pilotInfo.name) $('nomePiloto').value = pilotInfo.name;
+        if (pilotInfo.canac) $('codigoAnac').value = pilotInfo.canac;
         populateLimitsForm();
     }
 
@@ -761,13 +854,10 @@
     function setupDataManagement() {
         document.getElementById('exportAllBtn').addEventListener('click', function () {
             const data = {
-                version: 1,
+                version: 2,
                 exportDate: new Date().toISOString(),
-                pilotInfo,
-                limits,
-                flights,
-                daysOff,
-                alerts
+                pilotInfo, limits, flights, daysOff, alerts,
+                aircraftInfo, maintenance, discrepancies, totals
             };
             downloadJSON(data, 'agroflight_backup_' + getToday() + '.json');
             showToast('Dados exportados!', 'success');
@@ -785,11 +875,12 @@
                     if (data.alerts) alerts = data.alerts;
                     if (data.limits) limits = { ...DEFAULT_LIMITS, ...data.limits };
                     if (data.pilotInfo) pilotInfo = data.pilotInfo;
-                    saveFlights();
-                    saveDaysOff();
-                    saveAlerts();
-                    saveLimits();
-                    savePilot();
+                    if (data.aircraftInfo) aircraftInfo = data.aircraftInfo;
+                    if (data.maintenance) maintenance = data.maintenance;
+                    if (data.discrepancies) discrepancies = data.discrepancies;
+                    if (data.totals) totals = data.totals;
+                    saveFlights(); saveDaysOff(); saveAlerts(); saveLimits(); savePilot();
+                    saveAircraft(); saveMaintenance(); saveDiscrepancies(); saveTotals();
                     applySettings();
                     refreshAll();
                     showToast('Dados importados com sucesso!', 'success');
@@ -803,12 +894,10 @@
 
         document.getElementById('clearDataBtn').addEventListener('click', function () {
             if (confirm('ATENÇÃO: Todos os dados serão apagados permanentemente. Deseja continuar?')) {
-                flights = [];
-                daysOff = [];
-                alerts = [];
-                localStorage.removeItem('agroflight_flights');
-                localStorage.removeItem('agroflight_daysoff');
-                localStorage.removeItem('agroflight_alerts');
+                flights = []; daysOff = []; alerts = []; discrepancies = [];
+                ['flights','daysoff','alerts','discrepancies'].forEach(function(k) {
+                    localStorage.removeItem('agroflight_' + k);
+                });
                 refreshAll();
                 showToast('Dados apagados', 'success');
             }
@@ -829,25 +918,22 @@
         }
         filtered.sort((a, b) => a.date.localeCompare(b.date) || a.takeoffTime.localeCompare(b.takeoffTime));
 
-        const headers = ['Data', 'Aeronave', 'Modelo', 'Tipo', 'Origem', 'Destino', 'Decolagem', 'Pouso', 'Tempo Voo', 'Início Jornada', 'Fim Jornada', 'Jornada', 'Pousos', 'Operação', 'Produto', 'Área (ha)', 'Observações'];
-        const rows = filtered.map(f => [
+        const headers = ['Nº', 'Data', 'Hora Apres.', 'De', 'Para', 'Partida', 'Corte', 'Hs Voo Total', 'Pousos Total', 'Comb. Total', 'Nome do Piloto', 'Código ANAC', 'NAT', 'Observações'];
+        const rows = filtered.map((f, i) => [
+            i + 1,
             f.date,
-            f.aircraft,
-            f.aircraftModel,
-            f.aircraftType,
-            f.origin,
-            f.destination,
-            f.takeoffTime,
-            f.landingTime,
+            f.horaApres,
+            f.de,
+            f.para,
+            f.partida,
+            f.corte,
             formatHours(calcFlightHours(f)),
-            f.dutyStart,
-            f.dutyEnd,
-            formatHours(calcDutyHours(f)),
-            f.landings,
-            getOperationLabel(f.operation),
-            f.product,
-            f.area,
-            f.observations
+            f.pousosTotal,
+            f.combTotal,
+            f.nomePiloto,
+            f.codigoAnac,
+            f.nat,
+            f.observacoes
         ]);
 
         let csv = '\uFEFF'; // BOM for Excel
@@ -874,19 +960,6 @@
         if (!dateStr) return '';
         const [y, m, d] = dateStr.split('-');
         return d + '/' + m + '/' + y;
-    }
-
-    function getOperationLabel(op) {
-        const labels = {
-            pulverizacao: 'Pulverização',
-            adubacao: 'Adubação',
-            semeadura: 'Semeadura',
-            dessecacao: 'Dessecação',
-            combate_incendio: 'Combate a Incêndio',
-            translado: 'Translado',
-            outro: 'Outro'
-        };
-        return labels[op] || op;
     }
 
     function esc(str) {
