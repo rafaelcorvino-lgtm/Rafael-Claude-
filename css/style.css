@@ -691,6 +691,40 @@ textarea {
     justify-content: flex-end;
 }
 
+/* ===== LOGBOOK TABLE (Diário de Bordo oficial) ===== */
+.logbook-table {
+    font-size: 12px;
+}
+
+.logbook-table th {
+    font-size: 11px;
+    padding: 8px 6px;
+    text-align: center;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.logbook-table td {
+    padding: 8px 6px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.logbook-table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.totals-row {
+    background: var(--bg-input) !important;
+}
+
+.totals-row td {
+    padding: 10px 8px;
+    font-size: 12px;
+    border-top: 2px solid var(--border-color);
+}
+
 /* ===== RESPONSIVE ===== */
 @media (max-width: 768px) {
     .sidebar {
